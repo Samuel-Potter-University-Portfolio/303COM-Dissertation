@@ -1,0 +1,5 @@
+## Ignore all dependency folders
+glm/
+glfw-32/
+glfw-64/
+glew/
