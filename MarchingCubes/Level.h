@@ -27,9 +27,80 @@ public:
 	void Load(Engine* engine);
 
 	/**
-	* Callback for when any logic should happen
+	* Called by the engine to distribute 
 	* @param deltaTime			Time (In seconds) since last update/render
 	*/
-	void Update(const float& deltaTime);
+	void HandleUpdate(const float& deltaTime);
+
+	/**
+	* Add an object to the level
+	* @param obj			The object to add (Level will manage memory)
+	*/
+	Object* AddObject(Object* obj);
+
+
+	/**
+	* Retreive first object which have the given tag
+	* @param tag			The tag to search for
+	* @return Vector containing all objects
+	*/
+	Object* FindObjectWithTag(const uint32& tag) const;
+	/**
+	* Retreive all objects which have the given tag
+	* @param tag			The tag to search for
+	* @return Vector containing all objects
+	*/
+	std::vector<Object*> FindObjectsWithTag(const uint32& tag) const;
+
+	/**
+	* Retreive first object which have the given name
+	* @param name			The name to search for
+	* @return Vector containing all objects
+	*/
+	Object* FindObjectWithName(const string& name) const;
+	/**
+	* Retreive all objects which have the given name
+	* @param name			The name to search for
+	* @return Vector containing all objects
+	*/
+	std::vector<Object*> FindObjectsWithName(const string& name) const;
+
+	/**
+	* Retreive first object which have the given name
+	* @param T				Type to search for
+	* @return Vector containing all objects
+	*/
+	template<typename T>
+	Object* FindObject() const 
+	{
+		for (Object* obj : m_objects)
+		{
+			T* c = dynamic_cast<T*>(obj);
+			if (c != nullptr)
+				return c;
+		}
+
+		return nullptr;
+	}
+	/**
+	* Retreive all objects which have the given name
+	* @param T				Type to search for
+	* @return Vector containing all objects
+	*/
+	template<typename T>
+	std::vector<T*> FindObjects() const 
+	{
+		std::vector<T*> output;
+
+		for (Object* obj : m_objects) 
+		{
+			T* c = dynamic_cast<T*>(obj);
+			if (c != nullptr)
+				output.push_back(c);
+		}
+
+		return output;
+	}
+
 };
 

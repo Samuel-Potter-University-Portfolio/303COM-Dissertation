@@ -10,6 +10,8 @@ Engine::Engine(const EngineInit& settings) : m_settings(settings)
 Engine::~Engine()
 {
 	delete m_window;
+	delete m_currentLevel;
+	LOG("Engine Destroyed.");
 }
 
 void Engine::LaunchMainLoop() 
@@ -49,5 +51,5 @@ void Engine::LaunchMainLoop()
 void Engine::Update(Window& window, const float& deltaTime) 
 {
 	if (m_currentLevel != nullptr)
-		m_currentLevel->Update(deltaTime);
+		m_currentLevel->HandleUpdate(deltaTime);
 }
