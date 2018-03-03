@@ -36,6 +36,12 @@ void Shader::Bind()
 		glDisable(GL_DEPTH_TEST);
 }
 
+void Shader::Unbind()
+{
+	glUseProgram(0);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
+}
 
 bool Shader::LoadVertexShaderFromMemory(const string& code)
 {

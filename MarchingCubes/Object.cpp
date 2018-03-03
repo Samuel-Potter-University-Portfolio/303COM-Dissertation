@@ -29,3 +29,8 @@ void Object::Begin()
 void Object::Update(const float& deltaTime)
 {
 }
+
+void Object::Draw(const class Window* window, const float& deltaTime)
+{
+
+}

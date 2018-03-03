@@ -2,6 +2,8 @@
 #include <glm.hpp>
 #include <string>
 
+#define Super __super
+
 
 typedef __int8		int8;
 typedef __int16		int16;

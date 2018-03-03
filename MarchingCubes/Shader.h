@@ -31,6 +31,10 @@ public:
 	* Bind all of the settings required to use this shader
 	*/
 	virtual void Bind();
+	/**
+	* Unbind all of the settings changed by this shader
+	*/
+	virtual void Unbind();
 
 
 	///

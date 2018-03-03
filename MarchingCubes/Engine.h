@@ -47,7 +47,7 @@ private:
 public:
 	inline Window* GetWindow() const { return m_window; }
 
-	inline void SetLevel(Level* level) { m_currentLevel = level; }
+	inline void SetLevel(Level* level) { m_currentLevel = level; level->Load(this); }
 	inline Level* GetLevel() const { return m_currentLevel; }
 };
 

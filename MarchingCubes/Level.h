@@ -1,6 +1,7 @@
 #pragma once
 #include "Common.h"
 #include "Object.h"
+#include "Camera.h"
 #include <vector>
 
 
@@ -14,6 +15,8 @@ private:
 	/// General settings
 	///
 	class Engine* m_engine;
+	Camera* m_camera;
+
 	std::vector<Object*> m_objects;
 
 public:
@@ -37,6 +40,13 @@ public:
 	* @param obj			The object to add (Level will manage memory)
 	*/
 	Object* AddObject(Object* obj);
+
+
+	///
+	/// Getters & Setters
+	///
+public:
+	inline Camera* GetCamera() const { return m_camera; }
 
 
 	/**

@@ -48,6 +48,13 @@ public:
 	*/
 	virtual void Update(const float& deltaTime);
 
+	/**
+	* Called when this object should be rendered
+	* @param window				The window which is being drawn to
+	* @param deltaTime			Time (In seconds) since last update/render
+	*/
+	virtual void Draw(const class Window* window, const float& deltaTime);
+
 
 
 	///

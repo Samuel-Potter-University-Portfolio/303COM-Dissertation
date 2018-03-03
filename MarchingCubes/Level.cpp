@@ -1,15 +1,20 @@
 #include "Level.h"
 #include "Logger.h"
+#include "Engine.h"
 
 
 Level::Level()
 {
+	m_camera = new Camera;
+	m_camera->SetNearPlane(0.1f);
+	m_camera->SetFarPlane(1000.0f);
 }
 
 Level::~Level()
 {
 	for (Object* obj : m_objects)
 		delete obj;
+	delete m_camera;
 	LOG("Level Destroyed.");
 }
 
@@ -20,8 +25,18 @@ void Level::Load(Engine* engine)
 
 void Level::HandleUpdate(const float& deltaTime)
 {
+	// Update
 	for (Object* obj : m_objects)
 		obj->HandleUpdate(deltaTime);
+
+	// Render
+	glClearColor(0.1451f, 0.1490f, 0.1922f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	Window* window = m_engine->GetWindow();
+
+	for (Object* obj : m_objects)
+		obj->Draw(window, deltaTime);
 }
 
 Object* Level::AddObject(Object* obj) 

@@ -3,6 +3,8 @@
 #include "Level.h"
 #include "Logger.h"
 
+#include "SkyBox.h"
+
 
 int main(int argc, char** argv)
 {
@@ -12,6 +14,7 @@ int main(int argc, char** argv)
 
 	Level* level = new Level;
 
+	level->AddObject(new SkyBox);
 
 	engine.SetLevel(level);
 	engine.LaunchMainLoop();

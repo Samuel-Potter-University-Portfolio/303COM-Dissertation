@@ -25,6 +25,15 @@
     <Filter Include="Source Files\Engine\GL">
       <UniqueIdentifier>{bf3a0471-4a34-4c55-98d0-e1bece0eb0f9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Engine\Objects">
+      <UniqueIdentifier>{601da082-e69f-47a4-a9ec-ff792ed9a02d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Engine\Objects">
+      <UniqueIdentifier>{aace4120-600f-4070-b136-ec65c89e8210}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\Shaders">
+      <UniqueIdentifier>{6649ec09-c798-49ff-8908-4aded209dddf}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -62,6 +71,18 @@
     </ClCompile>
     <ClCompile Include="Transform.cpp">
       <Filter>Source Files\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="SkyBox.cpp">
+      <Filter>Source Files\Engine\Objects</Filter>
+    </ClCompile>
+    <ClCompile Include="Material.cpp">
+      <Filter>Source Files\Engine\GL</Filter>
+    </ClCompile>
+    <ClCompile Include="SkyboxMaterial.cpp">
+      <Filter>Source Files\Engine\GL</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera.cpp">
+      <Filter>Source Files\Engine\GL</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -101,8 +122,25 @@
     <ClInclude Include="Transform.h">
       <Filter>Header Files\Engine</Filter>
     </ClInclude>
-    <ClInclude Include="Temp.h">
-      <Filter>Header Files\Engine</Filter>
+    <ClInclude Include="SkyBox.h">
+      <Filter>Header Files\Engine\Objects</Filter>
     </ClInclude>
+    <ClInclude Include="Material.h">
+      <Filter>Header Files\Engine\GL</Filter>
+    </ClInclude>
+    <ClInclude Include="SkyboxMaterial.h">
+      <Filter>Header Files\Engine\GL</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera.h">
+      <Filter>Header Files\Engine\GL</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\Shaders\skybox.vert.glsl">
+      <Filter>Resource Files\Shaders</Filter>
+    </None>
+    <None Include="Resources\Shaders\skybox.frag.glsl">
+      <Filter>Resource Files\Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
