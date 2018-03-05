@@ -4,6 +4,7 @@
 #include "Logger.h"
 
 #include "SkyBox.h"
+#include "SpectatorController.h"
 
 
 int main(int argc, char** argv)
@@ -14,6 +15,7 @@ int main(int argc, char** argv)
 
 	Level* level = new Level;
 
+	level->AddObject(new SpectatorController);
 	level->AddObject(new SkyBox);
 
 	engine.SetLevel(level);

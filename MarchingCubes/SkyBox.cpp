@@ -48,9 +48,6 @@ void SkyBox::Begin()
 #include "Level.h"
 void SkyBox::Draw(const Window* window, const float& deltaTime) 
 {
-	// TODO - Remove TEST
-	GetLevel()->GetCamera()->SetEularRotation(GetLevel()->GetCamera()->GetEularRotation() + vec3(0, 90.0f * deltaTime, 0));
-
 	m_material->Bind(window, GetLevel());
 	m_material->PrepareMesh(m_mesh);
 	m_material->RenderInstance(nullptr);

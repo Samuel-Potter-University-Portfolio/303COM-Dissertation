@@ -71,5 +71,6 @@ public:
 	inline bool HasTag(const uint32& tag) const { return (m_tags & tag) != 0; }
 
 	inline Level* GetLevel() const { return m_level; }
+	class Engine* GetEngine() const;
 };
 

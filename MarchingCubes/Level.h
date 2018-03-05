@@ -46,6 +46,7 @@ public:
 	/// Getters & Setters
 	///
 public:
+	inline Engine* GetEngine() const { return m_engine; }
 	inline Camera* GetCamera() const { return m_camera; }
 
 

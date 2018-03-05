@@ -1,5 +1,5 @@
 #include "Object.h"
-
+#include "Level.h"
 
 
 Object::Object()
@@ -33,4 +33,9 @@ void Object::Update(const float& deltaTime)
 void Object::Draw(const class Window* window, const float& deltaTime)
 {
 
+}
+
+Engine* Object::GetEngine() const 
+{
+	return GetLevel()->GetEngine();
 }

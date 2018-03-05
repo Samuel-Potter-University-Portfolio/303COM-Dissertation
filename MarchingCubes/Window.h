@@ -47,8 +47,8 @@ private:
 	///
 	/// Sub-controllers
 	///
-	Keyboard m_keyboard;
-	Mouse m_mouse;
+	Keyboard* m_keyboard = nullptr;
+	Mouse* m_mouse = nullptr;
 
 
 public:
@@ -86,7 +86,7 @@ public:
 	inline int32 GetHeight() const { return m_height; }
 	inline float GetAspectRatio() const { return m_aspectRatio; }
 
-	inline Keyboard& GetKeyboard() { return m_keyboard; }
-	inline Mouse& GetMouse() { return m_mouse; }
+	inline Keyboard* GetKeyboard() { return m_keyboard; }
+	inline Mouse* GetMouse() { return m_mouse; }
 };
 

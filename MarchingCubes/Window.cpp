@@ -76,8 +76,11 @@ bool Window::Open(const WindowInit& settings)
 
 	// Set other settings
 	glfwSwapInterval(settings.bVerticalSync);
-	m_keyboard.Link(m_glfwWindow);
-	m_mouse.Link(m_glfwWindow);
+
+	m_keyboard = new Keyboard;
+	m_keyboard->Link(m_glfwWindow);
+	m_mouse = new Mouse;
+	m_mouse->Link(m_glfwWindow);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -95,8 +98,8 @@ void Window::LaunchMainLoop(WindowCallback callback)
 	{
 		// Update controllers
 		glfwPollEvents();
-		m_keyboard.UpdateStates();
-		m_mouse.UpdateStates();
+		m_keyboard->UpdateStates();
+		m_mouse->UpdateStates();
 
 
 		// Update size window if needed
