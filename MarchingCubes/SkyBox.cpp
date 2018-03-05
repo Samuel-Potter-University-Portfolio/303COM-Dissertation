@@ -45,7 +45,6 @@ void SkyBox::Begin()
 	m_material = new SkyboxMaterial;
 }
 
-#include "Level.h"
 void SkyBox::Draw(const Window* window, const float& deltaTime) 
 {
 	m_material->Bind(window, GetLevel());

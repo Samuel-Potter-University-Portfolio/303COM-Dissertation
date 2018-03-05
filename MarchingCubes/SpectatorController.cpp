@@ -33,11 +33,22 @@ void SpectatorController::Update(const float& deltaTime)
 	if (mouse->IsButtonPressed(Mouse::Button::MB_LEFT))
 		mouse->SetGrabbed(!mouse->IsGrabbed());
 
+
 	if (mouse->IsGrabbed())
 	{
 		const float turn = 1.18f * 0.05f;
 		const vec2 vel = mouse->GetVelocity();
 
-		camera->SetEularRotation(camera->GetEularRotation() + vec3(-vel.y * turn, -vel.x * turn, 0.0f));
+		vec3 rotation = camera->GetEularRotation() + vec3(-vel.y * turn, -vel.x * turn, 0.0f);
+		if (rotation.x < -89.0f)
+			rotation.x = -89.0f;
+		if (rotation.x > 89.0f)
+			rotation.x = 89.0f;
+
+		rotation.y = std::fmodf(rotation.y, 360.0f);
+		if (rotation.y < 0.0f)
+			rotation.y = 360.0f - rotation.y;
+
+		camera->SetEularRotation(rotation);
 	}
 }
