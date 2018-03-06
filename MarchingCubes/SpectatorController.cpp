@@ -20,14 +20,19 @@ void SpectatorController::Update(const float& deltaTime)
 
 
 	if (keyboard->IsKeyDown(Keyboard::Key::KV_W))
-		camera->Translate(camera->GetForward() * speed);
+		m_transform.Translate(camera->GetForward() * speed);
 	if (keyboard->IsKeyDown(Keyboard::Key::KV_S))
-		camera->Translate(-camera->GetForward() * speed);
+		m_transform.Translate(-camera->GetForward() * speed);
 
 	if (keyboard->IsKeyDown(Keyboard::Key::KV_D))
-		camera->Translate(camera->GetRight() * speed);
+		m_transform.Translate(camera->GetRight() * speed);
 	if (keyboard->IsKeyDown(Keyboard::Key::KV_A))
-		camera->Translate(-camera->GetRight() * speed);
+		m_transform.Translate(-camera->GetRight() * speed);
+
+	if (keyboard->IsKeyDown(Keyboard::Key::KV_SPACE))
+		m_transform.Translate(vec3(0, speed, 0));
+	if (keyboard->IsKeyDown(Keyboard::Key::KV_LCONTROL))
+		m_transform.Translate(vec3(0, -speed, 0));
 
 
 	if (mouse->IsButtonPressed(Mouse::Button::MB_LEFT))
@@ -39,7 +44,7 @@ void SpectatorController::Update(const float& deltaTime)
 		const float turn = 1.18f * 0.05f;
 		const vec2 vel = mouse->GetVelocity();
 
-		vec3 rotation = camera->GetEularRotation() + vec3(-vel.y * turn, -vel.x * turn, 0.0f);
+		vec3 rotation = m_transform.GetEularRotation() + vec3(-vel.y * turn, -vel.x * turn, 0.0f);
 		if (rotation.x < -89.0f)
 			rotation.x = -89.0f;
 		if (rotation.x > 89.0f)
@@ -49,6 +54,9 @@ void SpectatorController::Update(const float& deltaTime)
 		if (rotation.y < 0.0f)
 			rotation.y = 360.0f - rotation.y;
 
-		camera->SetEularRotation(rotation);
+		m_transform.SetEularRotation(rotation);
 	}
+
+	camera->SetLocation(m_transform.GetLocation());
+	camera->SetEularRotation(m_transform.GetEularRotation());
 }

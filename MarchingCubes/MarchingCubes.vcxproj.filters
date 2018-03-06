@@ -34,6 +34,12 @@
     <Filter Include="Resource Files\Shaders">
       <UniqueIdentifier>{6649ec09-c798-49ff-8908-4aded209dddf}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Volume">
+      <UniqueIdentifier>{ed174005-8448-4903-9910-86e47c13cb0a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Volume">
+      <UniqueIdentifier>{0d611b19-420f-4df0-8f74-127fc2ba44c7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -87,11 +93,14 @@
     <ClCompile Include="SpectatorController.cpp">
       <Filter>Source Files\Engine\Objects</Filter>
     </ClCompile>
-    <ClCompile Include="VoxelVolume.cpp">
-      <Filter>Source Files\Engine\Objects</Filter>
-    </ClCompile>
     <ClCompile Include="DefaultMaterial.cpp">
       <Filter>Source Files\Engine\GL</Filter>
+    </ClCompile>
+    <ClCompile Include="VolumeData.cpp">
+      <Filter>Source Files\Volume</Filter>
+    </ClCompile>
+    <ClCompile Include="VoxelVolume.cpp">
+      <Filter>Source Files\Volume</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -146,11 +155,17 @@
     <ClInclude Include="SpectatorController.h">
       <Filter>Header Files\Engine\Objects</Filter>
     </ClInclude>
-    <ClInclude Include="VoxelVolume.h">
-      <Filter>Header Files\Engine\Objects</Filter>
-    </ClInclude>
     <ClInclude Include="DefaultMaterial.h">
       <Filter>Header Files\Engine\GL</Filter>
+    </ClInclude>
+    <ClInclude Include="VolumeData.h">
+      <Filter>Header Files\Volume</Filter>
+    </ClInclude>
+    <ClInclude Include="VoxelVolume.h">
+      <Filter>Header Files\Volume</Filter>
+    </ClInclude>
+    <ClInclude Include="MarchingCubes.h">
+      <Filter>Header Files\Volume</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
