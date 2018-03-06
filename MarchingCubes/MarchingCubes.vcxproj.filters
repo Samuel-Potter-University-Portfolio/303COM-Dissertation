@@ -40,6 +40,9 @@
     <Filter Include="Source Files\Volume">
       <UniqueIdentifier>{0d611b19-420f-4df0-8f74-127fc2ba44c7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="PVM">
+      <UniqueIdentifier>{7e733c25-2699-4471-a711-0b9c76f8f718}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -101,6 +104,9 @@
     </ClCompile>
     <ClCompile Include="VoxelVolume.cpp">
       <Filter>Source Files\Volume</Filter>
+    </ClCompile>
+    <ClCompile Include="PVM\ddsbase.cpp">
+      <Filter>PVM</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -166,6 +172,12 @@
     </ClInclude>
     <ClInclude Include="MarchingCubes.h">
       <Filter>Header Files\Volume</Filter>
+    </ClInclude>
+    <ClInclude Include="PVM\codebase.h">
+      <Filter>PVM</Filter>
+    </ClInclude>
+    <ClInclude Include="PVM\ddsbase.h">
+      <Filter>PVM</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

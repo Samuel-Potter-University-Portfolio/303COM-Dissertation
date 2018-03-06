@@ -13,9 +13,10 @@ public:
 	* @param width				The size of the data on the x axis
 	* @param height				The size of the data on the y axis
 	* @param depth				The size of the data on the z axis
+	* @param scale				The scale to use for the data
 	* @param defaultValue		The default value to set each voxel to
 	*/
-	virtual void Init(uint32 width, uint32 height, uint32 depth, float defaultValue) = 0;
+	virtual void Init(uint32 width, uint32 height, uint32 depth, vec3 scale, float defaultValue) = 0;
 
 	/**
 	* Set the value of a specific voxel
@@ -49,6 +50,7 @@ private:
 	/// General Vars
 	///
 	float* m_data = nullptr;
+	vec3 m_scale;
 	uint32 m_width;
 	uint32 m_height;
 	uint32 m_depth;
@@ -56,7 +58,7 @@ private:
 public:
 	~VolumeData();
 
-	virtual void Init(uint32 width, uint32 height, uint32 depth, float defaultValue) override;
+	virtual void Init(uint32 width, uint32 height, uint32 depth, vec3 scale, float defaultValue) override;
 
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override;
 
@@ -71,5 +73,7 @@ public:
 	inline uint32 GetWidth() const { return m_width; }
 	inline uint32 GetHeight() const { return m_height; }
 	inline uint32 GetDepth() const { return m_depth; }
+
+	inline vec3 GetScale() const { return m_scale; }
 };
 

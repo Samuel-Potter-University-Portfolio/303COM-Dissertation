@@ -53,7 +53,11 @@ void VoxelVolume::Draw(const class Window* window, const float& deltaTime)
 	{
 		m_material->Bind(window, GetLevel());
 		m_material->PrepareMesh(m_mesh);
-		m_material->RenderInstance(nullptr);
+
+		Transform t;
+		t.SetScale(m_data.GetScale());
+		m_material->RenderInstance(&t);
+
 		m_material->Unbind(window, GetLevel());
 	}
 }
@@ -61,7 +65,7 @@ void VoxelVolume::Draw(const class Window* window, const float& deltaTime)
 void VoxelVolume::BuildMesh() 
 {
 	std::unordered_map<vec3, uint32, vec3_KeyFuncs> vertexIndexLookup;
-	const float isoLevel = 0.5f;
+	const float isoLevel = 0.15f;
 	vec3 edges[12];
 
 	std::vector<vec3> vertices;
