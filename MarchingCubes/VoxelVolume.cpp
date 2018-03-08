@@ -5,6 +5,10 @@
 #include "DefaultMaterial.h"
 
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <gtx\vector_angle.hpp>
+
+
 /**
 * The appropriate hashing functions which are needed to use vec3 as a key
 * https://stackoverflow.com/questions/9047612/glmivec2-as-key-in-unordered-map
@@ -69,6 +73,7 @@ void VoxelVolume::BuildMesh()
 	vec3 edges[12];
 
 	std::vector<vec3> vertices;
+	std::vector<vec3> normals;
 	std::vector<uint32> triangles;
 
 	for (uint32 x = 0; x < m_data.GetWidth() - 1; ++x)
@@ -144,6 +149,38 @@ void VoxelVolume::BuildMesh()
 			}
 
 
+	// Make normals out of weighted triangles
+	std::unordered_map<uint32, vec3> normalLookup;
+
+	// Generate normals from triss
+	for (uint32 i = 0; i < triangles.size(); i += 3)
+	{
+		uint32 ai = triangles[i];
+		uint32 bi = triangles[i + 1];
+		uint32 ci = triangles[i + 2];
+
+		vec3 a = vertices[ai];
+		vec3 b = vertices[bi];
+		vec3 c = vertices[ci];
+
+
+		// Normals are weighed based on the angle of the edges that connect that corner
+		vec3 crossed = glm::cross(b - a, c - a);
+		vec3 normal = glm::normalize(crossed);
+		float area = crossed.length() * 0.5f;
+
+		normalLookup[ai] += crossed * glm::angle(b - a, c - a);
+		normalLookup[bi] += crossed * glm::angle(a - b, c - b);
+		normalLookup[ci] += crossed * glm::angle(a - c, b - c);
+	}
+
+	// Put normals into vector
+	normals.reserve(vertices.size());
+	for (uint32 i = 0; i < vertices.size(); ++i)
+		normals.emplace_back(normalLookup[i]);
+
+
 	m_mesh->SetVertices(vertices);
+	m_mesh->SetNormals(normals);
 	m_mesh->SetTriangles(triangles);
 }
