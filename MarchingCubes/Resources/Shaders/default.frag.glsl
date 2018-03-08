@@ -18,7 +18,8 @@ void main()
 	float diffuse0 = max(dot(-lightDirection0, normal), 0.2);
 
 
-	vec3 colour = vec3(1, 1, 1);
+	vec3 colour = mod(passPos, 1.0);
+	colour = clamp(colour, 0.75, 1.0);
 	outColour.rgb = colour * (diffuse0);
 	outColour.a = 1.0;
 }

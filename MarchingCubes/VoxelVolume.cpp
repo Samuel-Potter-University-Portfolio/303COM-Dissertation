@@ -27,6 +27,30 @@ struct vec3_KeyFuncs
 };
 
 
+/**
+* Interpolate between voxels to get more precise intersection
+* @param isoValue				The value being used currently by MC
+* @param a						The position of the first voxel
+* @param b						The position of the second voxel
+* @param aVal					The value at the first voxel
+* @param bVal					The value at the second voxel
+*/
+static vec3 VertexLerp(float isoLevel, const vec3& a, const vec3& b, float aVal, float bVal)
+{
+	const float closeValue = 0.00001f;
+
+	if (glm::abs(isoLevel - aVal) < closeValue)
+		return a;
+	if (glm::abs(isoLevel - bVal) < closeValue)
+		return b;
+	if (glm::abs(aVal - bVal) < closeValue)
+		return a;
+
+	float mu = (isoLevel - aVal) / (bVal - aVal);
+	return a + mu * (b - a);
+}
+
+
 
 VoxelVolume::VoxelVolume()
 {
@@ -97,31 +121,33 @@ void VoxelVolume::BuildMesh()
 					continue;
 
 				// Smooth edges based on density
+#define VERT_LERP(x0, y0, z0, x1, y1, z1) VertexLerp(isoLevel, vec3(x + x0,y + y0,z + z0), vec3(x + x1, y + y1, z + z1), m_data.Get(x + x0, y + y0, z + z0), m_data.Get(x + x1, y + y1, z + z1))
+				
 				if (MC::CaseRequiredEdges[caseIndex] & 1)
-					edges[0] = vec3(x + 0.5f, y + 0.0f, z + 0.0f);
+					edges[0] = VERT_LERP(0,0,0, 1,0,0);
 				if (MC::CaseRequiredEdges[caseIndex] & 2)
-					edges[1] = vec3(x + 1.0f, y + 0.0f, z + 0.5f);
+					edges[1] = VERT_LERP(1,0,0, 1,0,1);
 				if (MC::CaseRequiredEdges[caseIndex] & 4)
-					edges[2] = vec3(x + 0.5f, y + 0.0f, z + 1.0f);
+					edges[2] = VERT_LERP(0,0,1, 1,0,1);
 				if (MC::CaseRequiredEdges[caseIndex] & 8)
-					edges[3] = vec3(x + 0.0f, y + 0.0f, z + 0.5f);
+					edges[3] = VERT_LERP(0,0,0, 0,0,1);
 				if (MC::CaseRequiredEdges[caseIndex] & 16)
-					edges[4] = vec3(x + 0.5f, y + 1.0f, z + 0.0f);
+					edges[4] = VERT_LERP(0,1,0, 1,1,0);
 				if (MC::CaseRequiredEdges[caseIndex] & 32)
-					edges[5] = vec3(x + 1.0f, y + 1.0f, z + 0.5f);
+					edges[5] = VERT_LERP(1,1,0, 1,1,1);
 				if (MC::CaseRequiredEdges[caseIndex] & 64)
-					edges[6] = vec3(x + 0.5f, y + 1.0f, z + 1.0f);
+					edges[6] = VERT_LERP(0,1,1, 1,1,1);
 				if (MC::CaseRequiredEdges[caseIndex] & 128)
-					edges[7] = vec3(x + 0.0f, y + 1.0f, z + 0.5f);
+					edges[7] = VERT_LERP(0,1,0, 0,1,1);
 				if (MC::CaseRequiredEdges[caseIndex] & 256)
-					edges[8] = vec3(x + 0.0f, y + 0.5f, z + 0.0f);
+					edges[8] = VERT_LERP(0,0,0, 0,1,0);
 				if (MC::CaseRequiredEdges[caseIndex] & 512)
-					edges[9] = vec3(x + 1.0f, y + 0.5f, z + 0.0f);
+					edges[9] = VERT_LERP(1,0,0, 1,1,0);
 				if (MC::CaseRequiredEdges[caseIndex] & 1024)
-					edges[10] = vec3(x + 1.0f, y + 0.5f, z + 1.0f);
+					edges[10] = VERT_LERP(1,0,1, 1,1,1);
 				if (MC::CaseRequiredEdges[caseIndex] & 2048)
-					edges[11] = vec3(x + 0.0f, y + 0.5f, z + 1.0f);
-				// TODO - ACTUALLY SMOOTH
+					edges[11] = VERT_LERP(0,0,1, 0,1,1);
+
 
 				// Add triangles for this case
 				int8* caseEdges = MC::Cases[caseIndex];
