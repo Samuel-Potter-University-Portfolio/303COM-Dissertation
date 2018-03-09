@@ -2,7 +2,7 @@
 #include "Common.h"
 
 #include "Keyboard.h"
-#include "Mouse.h";
+#include "Mouse.h"
 
 #include <functional>
 #include <GL\glew.h>

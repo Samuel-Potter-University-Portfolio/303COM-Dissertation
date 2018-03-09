@@ -134,6 +134,7 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="DefaultMaterial.cpp" />
     <ClCompile Include="Engine.cpp" />
+    <ClCompile Include="InteractionMaterial.cpp" />
     <ClCompile Include="Keyboard.cpp" />
     <ClCompile Include="Level.cpp" />
     <ClCompile Include="Logger.cpp" />
@@ -158,6 +159,7 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="DefaultMaterial.h" />
     <ClInclude Include="Engine.h" />
+    <ClInclude Include="InteractionMaterial.h" />
     <ClInclude Include="Keyboard.h" />
     <ClInclude Include="Level.h" />
     <ClInclude Include="Logger.h" />
@@ -168,6 +170,7 @@
     <ClInclude Include="Object.h" />
     <ClInclude Include="PVM\codebase.h" />
     <ClInclude Include="PVM\ddsbase.h" />
+    <ClInclude Include="Ray.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="SkyBox.h" />
     <ClInclude Include="SkyboxMaterial.h" />
@@ -181,6 +184,8 @@
   <ItemGroup>
     <None Include="Resources\Shaders\default.frag.glsl" />
     <None Include="Resources\Shaders\default.vert.glsl" />
+    <None Include="Resources\Shaders\interaction.frag.glsl" />
+    <None Include="Resources\Shaders\interaction.vert.glsl" />
     <None Include="Resources\Shaders\skybox.frag.glsl" />
     <None Include="Resources\Shaders\skybox.vert.glsl" />
   </ItemGroup>

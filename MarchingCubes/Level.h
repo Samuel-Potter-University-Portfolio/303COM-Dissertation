@@ -82,7 +82,7 @@ public:
 	* @return Vector containing all objects
 	*/
 	template<typename T>
-	Object* FindObject() const 
+	T* FindObject() const 
 	{
 		for (Object* obj : m_objects)
 		{

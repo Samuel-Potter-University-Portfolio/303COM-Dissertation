@@ -50,7 +50,7 @@ private:
 	/// General Vars
 	///
 	float* m_data = nullptr;
-	vec3 m_scale;
+	vec3 m_scale = vec3(1, 1, 1);
 	uint32 m_width;
 	uint32 m_height;
 	uint32 m_depth;

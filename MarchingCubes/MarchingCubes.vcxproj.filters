@@ -108,6 +108,9 @@
     <ClCompile Include="PVM\ddsbase.cpp">
       <Filter>PVM</Filter>
     </ClCompile>
+    <ClCompile Include="InteractionMaterial.cpp">
+      <Filter>Source Files\Engine\GL</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Logger.h">
@@ -179,6 +182,12 @@
     <ClInclude Include="PVM\ddsbase.h">
       <Filter>PVM</Filter>
     </ClInclude>
+    <ClInclude Include="Ray.h">
+      <Filter>Header Files\Volume</Filter>
+    </ClInclude>
+    <ClInclude Include="InteractionMaterial.h">
+      <Filter>Header Files\Engine\GL</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\Shaders\skybox.vert.glsl">
@@ -191,6 +200,12 @@
       <Filter>Resource Files\Shaders</Filter>
     </None>
     <None Include="Resources\Shaders\default.vert.glsl">
+      <Filter>Resource Files\Shaders</Filter>
+    </None>
+    <None Include="Resources\Shaders\interaction.frag.glsl">
+      <Filter>Resource Files\Shaders</Filter>
+    </None>
+    <None Include="Resources\Shaders\interaction.vert.glsl">
       <Filter>Resource Files\Shaders</Filter>
     </None>
   </ItemGroup>

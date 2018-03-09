@@ -54,6 +54,7 @@ static vec3 VertexLerp(float isoLevel, const vec3& a, const vec3& b, float aVal,
 
 VoxelVolume::VoxelVolume()
 {
+	m_isoLevel = 0.15;
 }
 
 VoxelVolume::~VoxelVolume()
@@ -83,17 +84,135 @@ void VoxelVolume::Draw(const class Window* window, const float& deltaTime)
 		m_material->PrepareMesh(m_mesh);
 
 		Transform t;
-		t.SetScale(m_data.GetScale());
+		// TODO - Support raycasting into scaling
+		//t.SetScale(m_data.GetScale());
 		m_material->RenderInstance(&t);
 
 		m_material->Unbind(window, GetLevel());
 	}
 }
 
+bool VoxelVolume::Raycast(const Ray& ray, VoxelHitInfo& hit, float maxDistance) 
+{
+	// Source: https://gist.github.com/yamamushi/5823518
+	// Bresenham Line Algorithm 3D
+
+	ivec3 a(
+		round(ray.GetOrigin().x),
+		round(ray.GetOrigin().y),
+		round(ray.GetOrigin().z)
+	);
+	ivec3 b(
+		round(ray.GetOrigin().x + ray.GetDirection().x * maxDistance),
+		round(ray.GetOrigin().y + ray.GetDirection().y * maxDistance),
+		round(ray.GetOrigin().z + ray.GetDirection().z * maxDistance)
+	);
+		
+	ivec3 point = a;
+	ivec3 delta = b - a;
+	ivec3 lmn = abs(delta);
+
+	ivec3 inc(
+		(delta.x < 0) ? -1 : 1,
+		(delta.y < 0) ? -1 : 1,
+		(delta.z < 0) ? -1 : 1
+	);
+	ivec3 delta2(
+		lmn.x << 1,
+		lmn.y << 1,
+		lmn.z << 1
+	);
+
+	int err_1;
+	int err_2;
+
+#define CHECK_OUTPUT \
+	if(point.x >= 0 && point.x < m_data.GetWidth() && point.y >= 0 && point.y < m_data.GetHeight() && point.z >= 0 && point.z < m_data.GetDepth()) \
+	{ \
+		float value = m_data.Get(point.x, point.y, point.z); \
+		if (value >= m_isoLevel) \
+		{ \
+			hit.coord = point; \
+			hit.value = value; \
+			return true; \
+		} \
+	}
+
+
+	if ((lmn.x >= lmn.y) && (lmn.x >= lmn.z))
+	{
+		err_1 = delta2.y - 1;
+		err_2 = delta2.z - 1;
+		for (int i = 0; i < lmn.x; ++i)
+		{
+			CHECK_OUTPUT;
+			if (err_1 > 0)
+			{
+				point.y += inc.y;
+				err_1 -= delta2.x;
+			}
+			if (err_2 > 0)
+			{
+				point.z += inc.z;
+				err_2 -= delta2.x;
+			}
+			err_1 += delta2.y;
+			err_2 += delta2.z;
+			point.x += inc.x;
+
+		}
+	}
+	else if ((lmn.y >= 1) && (lmn.y >= lmn.z)) 
+	{
+		err_1 = delta2.x - lmn.y;
+		err_2 = delta2.z - lmn.y;
+		for (int i = 0; i < lmn.y; ++i) 
+		{
+			CHECK_OUTPUT;
+			if (err_1 > 0)
+			{
+				point.x += inc.x;
+				err_1 -= delta2.y;
+			}
+			if (err_2 > 0)
+			{
+				point.z += inc.z;
+				err_2 -= delta2.y;
+			}
+			err_1 += delta2.x;
+			err_2 += delta2.z;
+			point.y += inc.y;
+		}
+	}
+	else
+	{
+		err_1 = delta2.y - lmn.z;
+		err_2 = delta2.x - lmn.z;
+		for (int i = 0; i < lmn.z; ++i)
+		{
+			CHECK_OUTPUT;
+			if (err_1 > 0)
+			{
+				point.y += inc.y;
+				err_1 -= delta2.z;
+			}
+			if (err_2 > 0)
+			{
+				point.x += inc.x;
+				err_2 -= delta2.z;
+			}
+			err_1 += delta2.y;
+			err_2 += delta2.x;
+			point.z += inc.z;
+		}
+	}
+
+	return false;
+}
+
 void VoxelVolume::BuildMesh() 
 {
 	std::unordered_map<vec3, uint32, vec3_KeyFuncs> vertexIndexLookup;
-	const float isoLevel = 0.15f;
 	vec3 edges[12];
 
 	std::vector<vec3> vertices;
@@ -106,14 +225,14 @@ void VoxelVolume::BuildMesh()
 			{
 				// Encode case based on bit presence
 				uint8 caseIndex = 0;
-				if (m_data.Get(x + 0, y + 0, z + 0) >= isoLevel) caseIndex |= 1;
-				if (m_data.Get(x + 1, y + 0, z + 0) >= isoLevel) caseIndex |= 2;
-				if (m_data.Get(x + 1, y + 0, z + 1) >= isoLevel) caseIndex |= 4;
-				if (m_data.Get(x + 0, y + 0, z + 1) >= isoLevel) caseIndex |= 8;
-				if (m_data.Get(x + 0, y + 1, z + 0) >= isoLevel) caseIndex |= 16;
-				if (m_data.Get(x + 1, y + 1, z + 0) >= isoLevel) caseIndex |= 32;
-				if (m_data.Get(x + 1, y + 1, z + 1) >= isoLevel) caseIndex |= 64;
-				if (m_data.Get(x + 0, y + 1, z + 1) >= isoLevel) caseIndex |= 128;
+				if (m_data.Get(x + 0, y + 0, z + 0) >= m_isoLevel) caseIndex |= 1;
+				if (m_data.Get(x + 1, y + 0, z + 0) >= m_isoLevel) caseIndex |= 2;
+				if (m_data.Get(x + 1, y + 0, z + 1) >= m_isoLevel) caseIndex |= 4;
+				if (m_data.Get(x + 0, y + 0, z + 1) >= m_isoLevel) caseIndex |= 8;
+				if (m_data.Get(x + 0, y + 1, z + 0) >= m_isoLevel) caseIndex |= 16;
+				if (m_data.Get(x + 1, y + 1, z + 0) >= m_isoLevel) caseIndex |= 32;
+				if (m_data.Get(x + 1, y + 1, z + 1) >= m_isoLevel) caseIndex |= 64;
+				if (m_data.Get(x + 0, y + 1, z + 1) >= m_isoLevel) caseIndex |= 128;
 			
 
 				// Fully inside iso-surface
@@ -121,7 +240,7 @@ void VoxelVolume::BuildMesh()
 					continue;
 
 				// Smooth edges based on density
-#define VERT_LERP(x0, y0, z0, x1, y1, z1) VertexLerp(isoLevel, vec3(x + x0,y + y0,z + z0), vec3(x + x1, y + y1, z + z1), m_data.Get(x + x0, y + y0, z + z0), m_data.Get(x + x1, y + y1, z + z1))
+#define VERT_LERP(x0, y0, z0, x1, y1, z1) VertexLerp(m_isoLevel, vec3(x + x0,y + y0,z + z0), vec3(x + x1, y + y1, z + z1), m_data.Get(x + x0, y + y0, z + z0), m_data.Get(x + x1, y + y1, z + z1))
 				
 				if (MC::CaseRequiredEdges[caseIndex] & 1)
 					edges[0] = VERT_LERP(0,0,0, 1,0,0);
@@ -160,8 +279,9 @@ void VoxelVolume::BuildMesh()
 					// Reuse old vertex (Lets us do normal smoothing)
 					auto it = vertexIndexLookup.find(vert);
 					if (it != vertexIndexLookup.end())
+					{
 						triangles.emplace_back(it->second);
-
+					}
 					else
 					{
 						const uint32 index = vertices.size();
