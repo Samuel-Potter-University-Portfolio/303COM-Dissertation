@@ -117,10 +117,21 @@ void SpectatorController::Update(const float& deltaTime)
 
 		const float interactionRate = 1.0f * deltaTime;
 
-		// Destroy voxel
-		if (bLookingAtVoxel && mouse->IsButtonDown(Mouse::Button::MB_LEFT))
+		// Voxel interaction
+		if (bLookingAtVoxel)
 		{
-			volume->Set(lookatVoxel.coord.x, lookatVoxel.coord.y, lookatVoxel.coord.z, glm::clamp(lookatVoxel.value - interactionRate, 0.0f, 1.0f));
+			// Destroy voxel
+			if (mouse->IsButtonDown(Mouse::Button::MB_LEFT))
+				volume->Set(lookatVoxel.coord.x, lookatVoxel.coord.y, lookatVoxel.coord.z, glm::clamp(lookatVoxel.value - interactionRate, 0.0f, 1.0f));
+
+			// Place voxel
+			if (mouse->IsButtonDown(Mouse::Button::MB_RIGHT))
+			{
+				if(lookatVoxel.value < 1.0f)
+					volume->Set(lookatVoxel.coord.x, lookatVoxel.coord.y, lookatVoxel.coord.z, glm::clamp(lookatVoxel.value + interactionRate, 0.0f, 1.0f));
+				else
+					volume->Set(lookatVoxel.surface.x, lookatVoxel.surface.y, lookatVoxel.surface.z, glm::clamp(lookatVoxel.surfaceValue + interactionRate, 0.0f, 1.0f));
+			}
 		}
 	}
 }
@@ -134,6 +145,8 @@ void SpectatorController::Draw(const Window* window, const float& deltaTime)
 
 		Transform t;
 		t.SetLocation(lookatVoxel.coord);
+		m_material->RenderInstance(&t);
+		t.SetLocation(lookatVoxel.surface);
 		m_material->RenderInstance(&t);
 		m_material->Unbind(window, GetLevel());
 	}

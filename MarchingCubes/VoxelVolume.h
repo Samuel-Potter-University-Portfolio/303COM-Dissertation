@@ -10,7 +10,9 @@
 struct VoxelHitInfo 
 {
 	float value;
+	float surfaceValue;
 	ivec3 coord;
+	ivec3 surface;
 };
 
 

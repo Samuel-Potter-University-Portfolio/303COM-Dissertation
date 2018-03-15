@@ -54,7 +54,7 @@ static vec3 VertexLerp(float isoLevel, const vec3& a, const vec3& b, float aVal,
 
 VoxelVolume::VoxelVolume()
 {
-	m_isoLevel = 0.15;
+	m_isoLevel = 0.15f;
 }
 
 VoxelVolume::~VoxelVolume()
@@ -107,8 +107,10 @@ bool VoxelVolume::Raycast(const Ray& ray, VoxelHitInfo& hit, float maxDistance)
 		round(ray.GetOrigin().y + ray.GetDirection().y * maxDistance),
 		round(ray.GetOrigin().z + ray.GetDirection().z * maxDistance)
 	);
-		
+
 	ivec3 point = a;
+	ivec3 lastPoint = a;
+	float lastValue = 0.0f;
 	ivec3 delta = b - a;
 	ivec3 lmn = abs(delta);
 
@@ -133,9 +135,13 @@ bool VoxelVolume::Raycast(const Ray& ray, VoxelHitInfo& hit, float maxDistance)
 		if (value >= m_isoLevel) \
 		{ \
 			hit.coord = point; \
+			hit.surface = lastPoint; \
 			hit.value = value; \
+			hit.surfaceValue = lastValue; \
 			return true; \
 		} \
+		lastPoint = point; \
+		lastValue = value; \
 	}
 
 
@@ -159,7 +165,6 @@ bool VoxelVolume::Raycast(const Ray& ray, VoxelHitInfo& hit, float maxDistance)
 			err_1 += delta2.y;
 			err_2 += delta2.z;
 			point.x += inc.x;
-
 		}
 	}
 	else if ((lmn.y >= 1) && (lmn.y >= lmn.z)) 
