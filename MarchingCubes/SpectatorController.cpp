@@ -105,17 +105,17 @@ void SpectatorController::Update(const float& deltaTime)
 	// Interaction
 	{
 		// Fetch for new interaction whenever mouse moves
-		VoxelVolume* volume = nullptr;
+		IVolumeData* volume = nullptr;
 		if (true || dot(mouse->GetVelocity(), mouse->GetVelocity()) > 0) // TODO - Take keyboard into account
 		{
 			bLookingAtVoxel = false;
-			volume = GetLevel()->FindObject<VoxelVolume>();
+			volume = GetLevel()->FindObject<IVolumeData>();
 
 			if (volume != nullptr)
 				bLookingAtVoxel = volume->Raycast(Ray(m_transform.GetLocation(), m_transform.GetForward()), lookatVoxel, 1000.0f);
 		}
 
-		const float interactionRate = 1.0f * deltaTime;
+		const float interactionRate = 5.0f * deltaTime;
 
 		// Voxel interaction
 		if (bLookingAtVoxel)

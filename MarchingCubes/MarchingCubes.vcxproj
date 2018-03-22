@@ -132,6 +132,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="ChunkedVolume.cpp" />
     <ClCompile Include="DefaultMaterial.cpp" />
     <ClCompile Include="Engine.cpp" />
     <ClCompile Include="InteractionMaterial.cpp" />
@@ -156,6 +157,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="ChunkedVolume.h" />
     <ClInclude Include="Common.h" />
     <ClInclude Include="DefaultMaterial.h" />
     <ClInclude Include="Engine.h" />

@@ -111,6 +111,9 @@
     <ClCompile Include="InteractionMaterial.cpp">
       <Filter>Source Files\Engine\GL</Filter>
     </ClCompile>
+    <ClCompile Include="ChunkedVolume.cpp">
+      <Filter>Source Files\Volume</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Logger.h">
@@ -187,6 +190,9 @@
     </ClInclude>
     <ClInclude Include="InteractionMaterial.h">
       <Filter>Header Files\Engine\GL</Filter>
+    </ClInclude>
+    <ClInclude Include="ChunkedVolume.h">
+      <Filter>Header Files\Volume</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

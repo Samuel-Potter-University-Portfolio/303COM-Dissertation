@@ -1,6 +1,5 @@
 #pragma once
 #include "Object.h"
-#include "Ray.h"
 
 #include "Mesh.h"
 #include "Material.h"
@@ -8,6 +7,9 @@
 
 
 
+/**
+* The default (unoptimized) implementation for MC
+*/
 class VoxelVolume : public Object, public IVolumeData
 {
 private:
@@ -16,12 +18,12 @@ private:
 	///
 	Mesh* m_mesh = nullptr;
 	Material* m_material = nullptr;
-	float m_isoLevel;
 	bool bRequiresRebuild;
 
 	///
 	/// Volume Vars
 	///
+	float m_isoLevel;
 	float* m_data = nullptr;
 	vec3 m_scale = vec3(1, 1, 1);
 	uvec3 m_resolution;

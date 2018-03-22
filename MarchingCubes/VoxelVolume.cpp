@@ -9,23 +9,6 @@
 #include <gtx\vector_angle.hpp>
 
 
-/**
-* The appropriate hashing functions which are needed to use vec3 as a key
-* https://stackoverflow.com/questions/9047612/glmivec2-as-key-in-unordered-map
-*/
-struct vec3_KeyFuncs
-{
-	inline size_t operator()(const vec3& v)const
-	{
-		return std::hash<int>()(v.x) ^ std::hash<int>()(v.y) ^ std::hash<int>()(v.z);
-	}
-
-	inline bool operator()(const vec3& a, const vec3& b)const
-	{
-		return a.x == b.x && a.y == b.y && a.z == b.z;
-	}
-};
-
 
 /**
 * Interpolate between voxels to get more precise intersection
@@ -61,6 +44,10 @@ VoxelVolume::~VoxelVolume()
 {
 	if (m_data != nullptr)
 		delete[] m_data;
+	if (m_mesh != nullptr)
+		delete m_mesh;
+	if (m_material != nullptr)
+		delete m_material;
 }
 
 

@@ -33,3 +33,34 @@ typedef glm::uvec4	uvec4;
 typedef glm::mat2	mat2;
 typedef glm::mat3	mat3;
 typedef glm::mat4	mat4;
+
+
+/**
+* The appropriate hashing functions which are needed to use vec3 as a key
+* https://stackoverflow.com/questions/9047612/glmivec2-as-key-in-unordered-map
+*/
+static struct vec3_KeyFuncs
+{
+	inline size_t operator()(const vec3& v)const
+	{
+		return std::hash<int>()(v.x) ^ std::hash<int>()(v.y) ^ std::hash<int>()(v.z);
+	}
+
+	inline bool operator()(const vec3& a, const vec3& b)const
+	{
+		return a.x == b.x && a.y == b.y && a.z == b.z;
+	}
+};
+
+static struct uvec3_KeyFuncs
+{
+	inline size_t operator()(const uvec3& v)const
+	{
+		return std::hash<int>()(v.x) ^ std::hash<int>()(v.y) ^ std::hash<int>()(v.z);
+	}
+
+	inline bool operator()(const uvec3& a, const uvec3& b)const
+	{
+		return a.x == b.x && a.y == b.y && a.z == b.z;
+	}
+};
