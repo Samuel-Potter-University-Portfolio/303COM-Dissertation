@@ -1,5 +1,18 @@
 #pragma once
 #include "Common.h"
+#include "Ray.h"
+
+
+/**
+* Structure used when attempting to raycast against a voxel volume
+*/
+struct VoxelHitInfo
+{
+	float value;
+	float surfaceValue;
+	ivec3 coord;
+	ivec3 surface;
+};
 
 
 /**
@@ -10,13 +23,12 @@ class IVolumeData
 public:
 	/**
 	* Initialize this volume with the given settings
-	* @param width				The size of the data on the x axis
-	* @param height				The size of the data on the y axis
-	* @param depth				The size of the data on the z axis
+	* @param resolution			The (initial) resolution of the data 
 	* @param scale				The scale to use for the data
 	* @param defaultValue		The default value to set each voxel to
 	*/
-	virtual void Init(uint32 width, uint32 height, uint32 depth, vec3 scale, float defaultValue) = 0;
+	virtual void Init(const uvec3& resolution, const vec3& scale, float defaultValue) = 0;
+
 
 	/**
 	* Set the value of a specific voxel
@@ -24,7 +36,6 @@ public:
 	* @param value				The value to set the voxel to
 	*/
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value) = 0;
-
 	/**
 	* Retrieve the value of a specific voxel
 	* @param x,y,z				The coordinate of the voxel to get
@@ -33,47 +44,36 @@ public:
 	virtual float Get(uint32 x, uint32 y, uint32 z) = 0;
 
 	/**
+	* Get the resolution of the data currently stored
+	* @return The resolution for x,y,z
+	*/
+	virtual uvec3 GetResolution() const = 0;
+	/**
+	* Does this volume data support dynamic resolution
+	* @return True if resolution can change
+	*/
+	virtual bool SupportsDynamicResolution() const = 0;
+
+	/**
+	* Get the iso level that the volume is currently being viewed at
+	* @return The iso level of the data [0.0-1.0]
+	*/
+	virtual float GetIsoLevel() const = 0;
+
+
+	/**
+	* Fetch information about this voxel
+	* @param ray				The ray to cast at the volume
+	* @param outHit				Where to store the information about the voxel
+	* @param isoLevel			The isoLevel to compare against
+	* @param maxDistance		The maximum distance of the ray
+	*/
+	virtual bool Raycast(const Ray& ray, VoxelHitInfo& outHit, float maxDistance = 100.0f);
+
+
+	/**
 	* Load volume data from a Pvm
 	* @param file				The URL of the file to load
 	*/
 	virtual bool LoadFromPvmFile(const char* file);
 };
-
-
-/**
-* Default volume storage
-*/
-class VolumeData : public IVolumeData
-{
-private:
-	///
-	/// General Vars
-	///
-	float* m_data = nullptr;
-	vec3 m_scale = vec3(1, 1, 1);
-	uint32 m_width;
-	uint32 m_height;
-	uint32 m_depth;
-
-public:
-	~VolumeData();
-
-	virtual void Init(uint32 width, uint32 height, uint32 depth, vec3 scale, float defaultValue) override;
-
-	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override;
-
-	virtual float Get(uint32 x, uint32 y, uint32 z) override;
-
-	///
-	/// Getters & Setters
-	///
-private:
-	inline uint32 GetIndex(uint32 x, uint32 y, uint32 z) const { return x + m_width * (y + m_height * z); }
-public:
-	inline uint32 GetWidth() const { return m_width; }
-	inline uint32 GetHeight() const { return m_height; }
-	inline uint32 GetDepth() const { return m_depth; }
-
-	inline vec3 GetScale() const { return m_scale; }
-};
-

@@ -8,7 +8,7 @@
 
 namespace MC
 {
-	/// Self written edge loopup table
+	/// Self written edge lookup table
 	static vec3 Edges[12]
 	{
 		vec3(0.5f, 0.0f, 0.0f),

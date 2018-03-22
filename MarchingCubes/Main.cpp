@@ -19,7 +19,6 @@ int main(int argc, char** argv)
 	level->AddObject(new SpectatorController);
 	level->AddObject(new SkyBox);
 	level->AddObject(new VoxelVolume);
-
 	engine.SetLevel(level);
 	engine.LaunchMainLoop();
 	return 0;
