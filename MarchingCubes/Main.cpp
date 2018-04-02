@@ -5,8 +5,10 @@
 
 #include "SkyBox.h"
 #include "SpectatorController.h"
+
 #include "VoxelVolume.h"
 #include "ChunkedVolume.h"
+#include "TreeVolume.h"
 
 
 int main(int argc, char** argv)
@@ -14,12 +16,11 @@ int main(int argc, char** argv)
 	EngineInit settings;
 	settings.Title = "Marching Cubes";
 	Engine engine(settings);
-
 	Level* level = new Level;
 
 	level->AddObject(new SpectatorController);
 	level->AddObject(new SkyBox);
-	level->AddObject(new ChunkedVolume);
+	level->AddObject(new TreeVolume);
 	engine.SetLevel(level);
 	engine.LaunchMainLoop();
 	return 0;

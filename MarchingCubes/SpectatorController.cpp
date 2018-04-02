@@ -39,6 +39,48 @@ void SpectatorController::Begin()
 
 	m_material = new InteractionMaterial;
 
+	// Set default volume
+	LOG("Setting up initial volume");
+	IVolumeData* volume = GetLevel()->FindObject<IVolumeData>();
+	if (volume != nullptr)
+	{
+		// volume->LoadFromPvmFile("Resources/Lobster.pvm");
+	
+		// Sphere
+		//*
+		const uint32 radius = 100;
+		const uint32 diametre = radius * 2;
+		volume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1), 0.0f);
+
+		for (int x = 0; x < diametre; ++x)
+			for (int y = 0; y < diametre; ++y)
+				for (int z = 0; z < diametre; ++z)
+				{
+					if (x == 0 && y == 0 && z == 0)
+					{
+						volume->Set(0, 0, 0, 1.0f);
+						continue;
+					}
+
+					float distance = glm::length(vec3(x, y, z) - vec3(radius, radius, radius));
+					float v = 1.0f - glm::clamp(distance / (float)radius, 0.0f, 1.0f);
+					volume->Set(x, y, z, v);
+				}
+				//*/
+
+		// Flat platform
+		/*
+		volume->Init(uvec3(128, 128, 128), vec3(1, 1, 1), 0.0f);
+		for (int x = 0; x < 128; ++x)
+			for (int z = 0; z < 128; ++z)
+			{
+				volume->Set(x, 127, z, 1.0f);
+				volume->Set(x, 7, z, 0.5f);
+				volume->Set(x, 0, z, 1.0f);
+			}
+			*/
+	}
+
 	LOG("Spawned in SpectatorController");
 }
 
@@ -54,6 +96,7 @@ void SpectatorController::Update(const float& deltaTime)
 {
 	Keyboard* keyboard = GetEngine()->GetWindow()->GetKeyboard();
 	Mouse* mouse = GetEngine()->GetWindow()->GetMouse();
+	IVolumeData* volume = GetLevel()->FindObject<IVolumeData>();
 
 	const float speed = 30.0f * deltaTime;
 
@@ -105,11 +148,9 @@ void SpectatorController::Update(const float& deltaTime)
 	// Interaction
 	{
 		// Fetch for new interaction whenever mouse moves
-		IVolumeData* volume = nullptr;
 		if (true || dot(mouse->GetVelocity(), mouse->GetVelocity()) > 0) // TODO - Take keyboard into account
 		{
 			bLookingAtVoxel = false;
-			volume = GetLevel()->FindObject<IVolumeData>();
 
 			if (volume != nullptr)
 				bLookingAtVoxel = volume->Raycast(Ray(m_transform.GetLocation(), m_transform.GetForward()), lookatVoxel, 1000.0f);

@@ -39,7 +39,7 @@ typedef glm::mat4	mat4;
 * The appropriate hashing functions which are needed to use vec3 as a key
 * https://stackoverflow.com/questions/9047612/glmivec2-as-key-in-unordered-map
 */
-static struct vec3_KeyFuncs
+struct vec3_KeyFuncs
 {
 	inline size_t operator()(const vec3& v)const
 	{
@@ -52,7 +52,7 @@ static struct vec3_KeyFuncs
 	}
 };
 
-static struct uvec3_KeyFuncs
+struct uvec3_KeyFuncs
 {
 	inline size_t operator()(const uvec3& v)const
 	{

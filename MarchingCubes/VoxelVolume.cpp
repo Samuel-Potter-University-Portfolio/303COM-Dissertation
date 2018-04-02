@@ -9,32 +9,6 @@
 #include <gtx\vector_angle.hpp>
 
 
-
-/**
-* Interpolate between voxels to get more precise intersection
-* @param isoValue				The value being used currently by MC
-* @param a						The position of the first voxel
-* @param b						The position of the second voxel
-* @param aVal					The value at the first voxel
-* @param bVal					The value at the second voxel
-*/
-static vec3 VertexLerp(float isoLevel, const vec3& a, const vec3& b, float aVal, float bVal)
-{
-	const float closeValue = 0.00001f;
-
-	if (glm::abs(isoLevel - aVal) < closeValue)
-		return a;
-	if (glm::abs(isoLevel - bVal) < closeValue)
-		return b;
-	if (glm::abs(aVal - bVal) < closeValue)
-		return a;
-
-	float mu = (isoLevel - aVal) / (bVal - aVal);
-	return a + mu * (b - a);
-}
-
-
-
 VoxelVolume::VoxelVolume()
 {
 	m_isoLevel = 0.15f;
@@ -84,8 +58,6 @@ void VoxelVolume::Begin()
 	m_mesh = new Mesh;
 	m_mesh->MarkDynamic();
 
-	// Temp
-	LoadFromPvmFile("Resources/Lobster.pvm");	
 	BuildMesh();
 }
 
@@ -145,7 +117,7 @@ void VoxelVolume::BuildMesh()
 					continue;
 
 				// Smooth edges based on density
-#define VERT_LERP(x0, y0, z0, x1, y1, z1) VertexLerp(m_isoLevel, vec3(x + x0,y + y0,z + z0), vec3(x + x1, y + y1, z + z1), Get(x + x0, y + y0, z + z0), Get(x + x1, y + y1, z + z1))
+#define VERT_LERP(x0, y0, z0, x1, y1, z1) MC::VertexLerp(m_isoLevel, vec3(x + x0,y + y0,z + z0), vec3(x + x1, y + y1, z + z1), Get(x + x0, y + y0, z + z0), Get(x + x1, y + y1, z + z1))
 				
 				if (MC::CaseRequiredEdges[caseIndex] & 1)
 					edges[0] = VERT_LERP(0,0,0, 1,0,0);

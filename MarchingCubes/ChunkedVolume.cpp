@@ -291,11 +291,6 @@ float ChunkedVolume::Get(uint32 x, uint32 y, uint32 z)
 void ChunkedVolume::Begin()
 {
 	m_material = new DefaultMaterial;
-	
-	// Temp
-	LoadFromPvmFile("Resources/Lobster.pvm");
-
-	return;
 }
 
 void ChunkedVolume::Update(const float& deltaTime)
@@ -307,7 +302,6 @@ void ChunkedVolume::Update(const float& deltaTime)
 }
 
 
-static int iii = 0;
 void ChunkedVolume::Draw(const class Window* window, const float& deltaTime)
 {
 	m_material->Bind(window, GetLevel());

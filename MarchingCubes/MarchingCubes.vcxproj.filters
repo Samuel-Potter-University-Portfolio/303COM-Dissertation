@@ -114,6 +114,12 @@
     <ClCompile Include="ChunkedVolume.cpp">
       <Filter>Source Files\Volume</Filter>
     </ClCompile>
+    <ClCompile Include="TreeVolume.cpp">
+      <Filter>Source Files\Volume</Filter>
+    </ClCompile>
+    <ClCompile Include="VolumeOctree.cpp">
+      <Filter>Source Files\Volume</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Logger.h">
@@ -192,6 +198,12 @@
       <Filter>Header Files\Engine\GL</Filter>
     </ClInclude>
     <ClInclude Include="ChunkedVolume.h">
+      <Filter>Header Files\Volume</Filter>
+    </ClInclude>
+    <ClInclude Include="TreeVolume.h">
+      <Filter>Header Files\Volume</Filter>
+    </ClInclude>
+    <ClInclude Include="VolumeOctree.h">
       <Filter>Header Files\Volume</Filter>
     </ClInclude>
   </ItemGroup>

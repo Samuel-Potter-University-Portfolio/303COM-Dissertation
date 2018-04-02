@@ -151,7 +151,9 @@
     <ClCompile Include="SpectatorController.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="Transform.cpp" />
+    <ClCompile Include="TreeVolume.cpp" />
     <ClCompile Include="VolumeData.cpp" />
+    <ClCompile Include="VolumeOctree.cpp" />
     <ClCompile Include="VoxelVolume.cpp" />
     <ClCompile Include="Window.cpp" />
   </ItemGroup>
@@ -179,7 +181,9 @@
     <ClInclude Include="SpectatorController.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="Transform.h" />
+    <ClInclude Include="TreeVolume.h" />
     <ClInclude Include="VolumeData.h" />
+    <ClInclude Include="VolumeOctree.h" />
     <ClInclude Include="VoxelVolume.h" />
     <ClInclude Include="Window.h" />
   </ItemGroup>

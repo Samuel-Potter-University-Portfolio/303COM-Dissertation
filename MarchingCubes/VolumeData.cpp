@@ -23,7 +23,7 @@ bool IVolumeData::LoadFromPvmFile(const char* file)
 
 
 	// Convert binary data into float data
-	Init(ivec3(width, height, depth), scale, 0.0f);
+	Init(uvec3(width, height, depth), scale, 0.0f);
 
 	uint8* data = volume;
 	for (uint32 z = 0; z < depth; ++z)
