@@ -252,6 +252,10 @@ void TreeVolume::BuildMesh()
 	//m_mesh->SetTriangles(triangles);
 	//return;
 
+	LOG("Total Average %f", m_octree->GetRootNode()->GetValueAverage());
+	LOG("Total Deviation %f", m_octree->GetRootNode()->GetValueDeviation());
+	//m_octree->GetRootNode();
+
 
 	for (uint32 x = 0; x < GetResolution().x - 1; ++x)
 		for (uint32 y = 0; y < GetResolution().y - 1; ++y)

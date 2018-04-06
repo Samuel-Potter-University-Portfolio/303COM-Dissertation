@@ -44,7 +44,7 @@ void SpectatorController::Begin()
 	IVolumeData* volume = GetLevel()->FindObject<IVolumeData>();
 	if (volume != nullptr)
 	{
-		// volume->LoadFromPvmFile("Resources/Lobster.pvm");
+		//volume->LoadFromPvmFile("Resources/Lobster.pvm");
 	
 		// Sphere
 		//*
@@ -78,7 +78,7 @@ void SpectatorController::Begin()
 				volume->Set(x, 7, z, 0.5f);
 				volume->Set(x, 0, z, 1.0f);
 			}
-			*/
+			//*/
 	}
 
 	LOG("Spawned in SpectatorController");

@@ -31,14 +31,14 @@ OctreeVolumeNode::~OctreeVolumeNode()
 
 OctreeVolumeBranch::OctreeVolumeBranch(uint16 resolution) : OctreeVolumeNode(resolution)
 {
-	if (resolution <= NODE_STRIDE)
-		LOG_ERROR("Branch node made with size(%i) <= Node Stride(%i)", GetResolution(), NODE_STRIDE);
+	if (resolution <= 1)
+		LOG_ERROR("Branch node made with size(%i) <= 1", GetResolution());
 }
 
 OctreeVolumeBranch::OctreeVolumeBranch(OctreeVolumeNode* parent) : OctreeVolumeNode(parent)
 {
-	if (GetResolution() <= NODE_STRIDE)
-		LOG_ERROR("Branch node made with size(%i) <= Node Stride(%i)", GetResolution(), NODE_STRIDE);
+	if (GetResolution() <= 1)
+		LOG_ERROR("Branch node made with size(%i) <= 1", GetResolution());
 }
 
 OctreeVolumeBranch::~OctreeVolumeBranch()
@@ -50,6 +50,12 @@ OctreeVolumeBranch::~OctreeVolumeBranch()
 
 void OctreeVolumeBranch::Set(uint32 x, uint32 y, uint32 z, float value)
 {
+	if (x >= GetResolution() || y >= GetResolution() || z >= GetResolution())
+	{
+		LOG_ERROR("(%i,%i,%i) is outside of volume (resolution:%i)", x, y, z, GetResolution());
+		return;
+	}
+
 	// Node centre is at halfRes,halfRes,halfRes
 	const uint16 halfRes = GetResolution() / 2;
 
@@ -75,10 +81,10 @@ void OctreeVolumeBranch::Set(uint32 x, uint32 y, uint32 z, float value)
 		else
 		{
 			// HalfRes equals the res size of the new node, so make sure to check
-			if (halfRes > NODE_STRIDE)
-				node = new OctreeVolumeBranch(this);
-			else
+			if (halfRes == 1)
 				node = new OctreeVolumeLeaf(this);
+			else
+				node = new OctreeVolumeBranch(this);
 		}
 	}
 
@@ -90,10 +96,17 @@ void OctreeVolumeBranch::Set(uint32 x, uint32 y, uint32 z, float value)
 		isFront ? z -halfRes: z,
 		value
 	);
+	RecalculateStats();
 }
 
 float OctreeVolumeBranch::Get(uint32 x, uint32 y, uint32 z) const
 {
+	if (x >= GetResolution() || y >= GetResolution() || z >= GetResolution())
+	{
+		LOG_ERROR("(%i,%i,%i) is outside of volume (resolution:%i)", x, y, z, GetResolution());
+		return DEFAULT_VALUE;
+	}
+	
 	// Node centre is at halfRes,halfRes,halfRes
 	const uint16 halfRes = GetResolution() / 2;
 
@@ -123,6 +136,21 @@ float OctreeVolumeBranch::Get(uint32 x, uint32 y, uint32 z) const
 	);
 }
 
+void OctreeVolumeBranch::RecalculateStats()
+{
+	// Calculate average
+	m_valueAverage = 0.0f;
+	for (OctreeVolumeNode* child : children)
+		m_valueAverage += child ? child->GetValueAverage() : DEFAULT_VALUE;
+	m_valueAverage /= 8.0f;
+
+	// Calulcate std deviation
+	float sum = 0.0f;
+	for (OctreeVolumeNode* child : children)
+		sum += std::pow((child ? child->GetValueAverage() : DEFAULT_VALUE) - m_valueAverage, 2);
+	m_valueDeviation = std::sqrt(sum / 8.0f);
+}
+
 
 
 ///
@@ -131,38 +159,10 @@ float OctreeVolumeBranch::Get(uint32 x, uint32 y, uint32 z) const
 
 OctreeVolumeLeaf::OctreeVolumeLeaf(OctreeVolumeNode* parent) : OctreeVolumeNode(parent)
 {
-	m_data = new float[GetResolution() * GetResolution() * GetResolution()]{ DEFAULT_VALUE };
 }
 OctreeVolumeLeaf::~OctreeVolumeLeaf() 
 {
-	delete[] m_data;
 }
-
-void OctreeVolumeLeaf::Set(uint32 x, uint32 y, uint32 z, float value) 
-{
-#ifdef _DEBUG
-	uint32 index = GetIndex(x, y, z);
-	if (index < 0 || index >= GetResolution() * GetResolution() * GetResolution())
-	{
-		LOG_ERROR("Set Index out of range: %i", index);
-		return;
-	}
-#endif
-	m_data[GetIndex(x, y, z)] = value;
-}
-float OctreeVolumeLeaf::Get(uint32 x, uint32 y, uint32 z) const
-{
-#ifdef _DEBUG
-	uint32 index = GetIndex(x, y, z);
-	if (index < 0 || index >= GetResolution() * GetResolution() * GetResolution())
-	{
-		LOG_ERROR("Set Index out of range: %i", index);
-		return DEFAULT_VALUE;
-	}
-#endif
-	return m_data[GetIndex(x, y, z)];
-}
-
 
 
 ///
@@ -171,10 +171,10 @@ float OctreeVolumeLeaf::Get(uint32 x, uint32 y, uint32 z) const
 
 VolumeOctree::VolumeOctree(uint16 resolution)
 {
-	if (resolution > NODE_STRIDE)
-		m_root = new OctreeVolumeBranch(resolution);
-	else
+	if (resolution == 1)
 		m_root = new OctreeVolumeLeaf(nullptr);
+	else
+		m_root = new OctreeVolumeBranch(resolution);
 }
 VolumeOctree::~VolumeOctree()
 {

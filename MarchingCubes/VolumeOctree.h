@@ -1,12 +1,9 @@
 #pragma once
 #include "Common.h"
+#include <vector>
 
 #ifndef DEFAULT_VALUE
 #define DEFAULT_VALUE 0.0f
-#endif
-
-#ifndef NODE_STRIDE
-#define NODE_STRIDE 4
 #endif
 
 
@@ -20,23 +17,33 @@ private:
 	/// General Vars
 	///
 	OctreeVolumeNode* m_parent;
-	uint16 m_depth;
+	uint8 m_depth;
 	uint16 m_resolution;
+
+	 
 
 public:
 	OctreeVolumeNode(uint16 resolution);
 	OctreeVolumeNode(OctreeVolumeNode* parent);
 	virtual ~OctreeVolumeNode();
 
+	/// Set the value at this sub-coordinate
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value) = 0;
+	/// Get the value at this sub-coordinate
 	virtual float Get(uint32 x, uint32 y, uint32 z) const = 0;
+
+	/// Calculate the average weight at this node
+	virtual float GetValueAverage() const = 0;
+	/// Calulate the standard deviation of the children of this node
+	virtual float GetValueDeviation() const = 0;
+
 
 	///
 	/// Getters & Setters
 	///
 public:
 	inline OctreeVolumeNode* GetParent() const { return m_parent; }
-	inline const uint16& GetDepth() const { return m_depth; }
+	inline const uint8& GetDepth() const { return m_depth; }
 	inline const uint16& GetResolution() const { return m_resolution; }
 };
 
@@ -61,6 +68,10 @@ public:
 	OctreeVolumeNode*& c110 = children[6]; // front top left
 	OctreeVolumeNode*& c111 = children[7]; // front top right
 
+private:
+	float m_valueAverage;
+	float m_valueDeviation;
+
 public:
 	OctreeVolumeBranch(uint16 resolution);
 	OctreeVolumeBranch(OctreeVolumeNode* parent);
@@ -68,6 +79,12 @@ public:
 
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override;
 	virtual float Get(uint32 x, uint32 y, uint32 z) const override;
+
+	virtual float GetValueAverage() const override { return m_valueAverage; }
+	virtual float GetValueDeviation() const override { return m_valueDeviation; }
+private:
+	/// Recalulate the average and deviation for this node
+	void RecalculateStats();
 };
 
 
@@ -81,17 +98,17 @@ private:
 	///
 	/// General Vars
 	///
-	float* m_data = nullptr;
+	float m_value = DEFAULT_VALUE;
 
 public:
 	OctreeVolumeLeaf(OctreeVolumeNode* parent);
 	virtual ~OctreeVolumeLeaf();
 
-	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override;
-	virtual float Get(uint32 x, uint32 y, uint32 z) const override;
+	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override { m_value = value; }
+	virtual float Get(uint32 x, uint32 y, uint32 z) const override { return m_value; }
 
-private:
-	inline uint32 GetIndex(uint32 x, uint32 y, uint32 z) const { return x + GetResolution() * (y + GetResolution() * z); }
+	virtual float GetValueAverage() const override { return m_value; }
+	virtual float GetValueDeviation() const override { return 0.0f; }
 };
 
 
