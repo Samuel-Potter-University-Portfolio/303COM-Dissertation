@@ -1,6 +1,9 @@
 #include "VolumeOctree.h"
 #include "Logger.h"
 #include "VoxelVolume.h"
+#include "Mesh.h"
+
+#include "MarchingCubes.h"
 
 
 
@@ -49,7 +52,7 @@ OctreeVolumeBranch::~OctreeVolumeBranch()
 			delete child;
 }
 
-void OctreeVolumeBranch::Set(uint32 x, uint32 y, uint32 z, float value)
+void OctreeVolumeBranch::Set(uint32 x, uint32 y, uint32 z, float value, std::vector<OctreeVolumeNode*>* additions)
 {
 	if (x >= GetResolution() || y >= GetResolution() || z >= GetResolution())
 	{
@@ -89,6 +92,10 @@ void OctreeVolumeBranch::Set(uint32 x, uint32 y, uint32 z, float value)
 			}
 			else
 				node = new OctreeVolumeBranch(this);
+
+			// Add this new node to additions, if applicable
+			if (additions)
+				additions->push_back(node);
 		}
 	}
 
@@ -98,7 +105,7 @@ void OctreeVolumeBranch::Set(uint32 x, uint32 y, uint32 z, float value)
 		isRight ? x - halfRes : x,
 		isTop	? y - halfRes : y,
 		isFront ? z -halfRes: z,
-		value
+		value, additions
 	);
 	RecalculateStats();
 }
@@ -182,6 +189,60 @@ uvec3 OctreeVolumeBranch::FetchRootCoords(const OctreeVolumeNode* child) const
 	return parentBranch ? parentBranch->FetchRootCoords(this) + offset : offset;
 }
 
+float OctreeVolumeBranch::FetchBuildIsolevel(const OctreeVolumeNode* source, int32 x, int32 y, int32 z) const 
+{
+	ivec3 offset;
+	const int32 res = GetResolution();
+	const int32 halfRes = GetResolution() / 2;
+
+	if (source == c000)
+		offset = ivec3(0, 0, 0) * halfRes;
+	else if (source == c001)
+		offset = ivec3(1, 0, 0) * halfRes;
+	else if (source == c010)
+		offset = ivec3(0, 1, 0) * halfRes;
+	else if (source == c011)
+		offset = ivec3(1, 1, 0) * halfRes;
+	else if (source == c100)
+		offset = ivec3(0, 0, 1) * halfRes;
+	else if (source == c101)
+		offset = ivec3(1, 0, 1) * halfRes;
+	else if (source == c110)
+		offset = ivec3(0, 1, 1) * halfRes;
+	else if (source == c111)
+		offset = ivec3(1, 1, 1) * halfRes;
+	else
+		return UNKNOWN_BUILD_VALUE;
+
+
+	// Convert x,y,z to this node's local coordinates
+	x += offset.x;
+	y += offset.y;
+	z += offset.z;
+
+
+	// Desired coord is outside of this node, so traverse up tree
+	if (x < 0 || y < 0 || z < 0 || x >= res || y >= res || z >= res)
+	{
+		auto parent = GetParentBranch();
+		if (parent)
+			return parent->FetchBuildIsolevel(this, x, y, z);
+		else
+			return UNKNOWN_BUILD_VALUE; // Most likely reached to of tree (So coord is bad)
+	}
+
+	// Desired coord is inside of this node, so traverse down tree
+	else
+	{
+		// TODO - Max/Min depth checks
+		return Get(x, y, z);
+	}
+}
+
+void OctreeVolumeBranch::ConstructMesh(MeshBuilderMinimal& build, float isoLevel, int32 depthDeltaAcc, int32 depthDeltaDec) 
+{
+	// TODO
+}
 
 ///
 /// Leaf
@@ -199,6 +260,85 @@ void OctreeVolumeLeaf::Init()
 	m_coordinates = GetParentBranch()->FetchRootCoords(this);
 }
 
+void OctreeVolumeLeaf::ConstructMesh(MeshBuilderMinimal& build, float isoLevel, int32 depthDeltaAcc, int32 depthDeltaDec)
+{
+	OctreeVolumeBranch* parent = GetParentBranch();
+	if (parent == nullptr)
+		return;
+
+
+	uint8 caseIndex = 0;
+	float v000 = m_value;
+	float v001 = parent->FetchBuildIsolevel(this, 0, 0, 1);
+	float v010 = parent->FetchBuildIsolevel(this, 0, 1, 0);
+	float v011 = parent->FetchBuildIsolevel(this, 0, 1, 1);
+	float v100 = parent->FetchBuildIsolevel(this, 1, 0, 0);
+	float v101 = parent->FetchBuildIsolevel(this, 1, 0, 1);
+	float v110 = parent->FetchBuildIsolevel(this, 1, 1, 0);
+	float v111 = parent->FetchBuildIsolevel(this, 1, 1, 1);
+
+	if (v000 >= isoLevel) caseIndex |= 1;
+	if (v100 >= isoLevel) caseIndex |= 2;
+	if (v101 >= isoLevel) caseIndex |= 4;
+	if (v001 >= isoLevel) caseIndex |= 8;
+	if (v010 >= isoLevel) caseIndex |= 16;
+	if (v110 >= isoLevel) caseIndex |= 32;
+	if (v111 >= isoLevel) caseIndex |= 64;
+	if (v011 >= isoLevel) caseIndex |= 128;
+
+
+	// Fully inside iso-surface
+	if (caseIndex == 0 || caseIndex == 255)
+		return;
+
+	// Smooth edges based on density
+	vec3 worldCoord = m_coordinates;
+	float resf = (float)GetResolution();
+#define VERT_LERP(x0, y0, z0, x1, y1, z1) MC::VertexLerp(isoLevel, worldCoord + vec3(x0, y0, z0)*resf, worldCoord + vec3(x1, y1, z1)*resf, v ## x0 ## y0 ## z0, v ## x1 ## y1 ## z1);
+	vec3 edges[12];
+
+	if (MC::CaseRequiredEdges[caseIndex] & 1)
+		edges[0] = VERT_LERP(0, 0, 0, 1, 0, 0);
+	if (MC::CaseRequiredEdges[caseIndex] & 2)
+		edges[1] = VERT_LERP(1, 0, 0, 1, 0, 1);
+	if (MC::CaseRequiredEdges[caseIndex] & 4)
+		edges[2] = VERT_LERP(0, 0, 1, 1, 0, 1);
+	if (MC::CaseRequiredEdges[caseIndex] & 8)
+		edges[3] = VERT_LERP(0, 0, 0, 0, 0, 1);
+	if (MC::CaseRequiredEdges[caseIndex] & 16)
+		edges[4] = VERT_LERP(0, 1, 0, 1, 1, 0);
+	if (MC::CaseRequiredEdges[caseIndex] & 32)
+		edges[5] = VERT_LERP(1, 1, 0, 1, 1, 1);
+	if (MC::CaseRequiredEdges[caseIndex] & 64)
+		edges[6] = VERT_LERP(0, 1, 1, 1, 1, 1);
+	if (MC::CaseRequiredEdges[caseIndex] & 128)
+		edges[7] = VERT_LERP(0, 1, 0, 0, 1, 1);
+	if (MC::CaseRequiredEdges[caseIndex] & 256)
+		edges[8] = VERT_LERP(0, 0, 0, 0, 1, 0);
+	if (MC::CaseRequiredEdges[caseIndex] & 512)
+		edges[9] = VERT_LERP(1, 0, 0, 1, 1, 0);
+	if (MC::CaseRequiredEdges[caseIndex] & 1024)
+		edges[10] = VERT_LERP(1, 0, 1, 1, 1, 1);
+	if (MC::CaseRequiredEdges[caseIndex] & 2048)
+		edges[11] = VERT_LERP(0, 0, 1, 0, 1, 1);
+	
+
+	// Add triangles for this case
+	int8* caseEdges = MC::Cases[caseIndex];
+	while (*caseEdges != -1)
+	{
+		int8 edge0 = *(caseEdges++);
+		int8 edge1 = *(caseEdges++);
+		int8 edge2 = *(caseEdges++);
+
+		uint32 a = build.AddVertex(edges[edge0]);
+		uint32 b = build.AddVertex(edges[edge1]);
+		uint32 c = build.AddVertex(edges[edge2]);
+
+		build.AddTriangle(a, b, c);
+	}
+}
+
 
 ///
 /// Combined octree
@@ -214,4 +354,27 @@ VolumeOctree::VolumeOctree(uint16 resolution)
 VolumeOctree::~VolumeOctree()
 {
 	delete m_root;
+}
+
+void VolumeOctree::BuildMesh(float isoLevel, Mesh* target)
+{
+	MeshBuilderMinimal builder;
+	builder.MarkDynamic();
+	
+	for (OctreeVolumeNode* node : testLayer)
+		node->ConstructMesh(builder, isoLevel, 0, 0);
+	
+	builder.SmoothNormals();
+	builder.BuildMesh(target);
+}
+
+void VolumeOctree::Set(uint32 x, uint32 y, uint32 z, float value)
+{ 
+	std::vector<OctreeVolumeNode*> newNodes;
+	m_root->Set(x, y, z, value, &newNodes);
+
+	// Add all nodes in bottom layer
+	for (OctreeVolumeNode* node : newNodes)
+		if (node->GetResolution() == 1)
+			testLayer.push_back(node);
 }

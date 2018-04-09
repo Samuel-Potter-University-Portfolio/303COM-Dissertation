@@ -8,7 +8,6 @@ Mesh::Mesh()
 {
 	glGenVertexArrays(1, &m_id);
 }
-
 Mesh::~Mesh()
 {
 	if (m_id != 0)
@@ -16,7 +15,7 @@ Mesh::~Mesh()
 }
 
 
-void Mesh::SetTriangles(std::vector<uint32>& triangles)
+void Mesh::SetTriangles(const std::vector<uint32>& triangles)
 {
 	glBindVertexArray(m_id);
 

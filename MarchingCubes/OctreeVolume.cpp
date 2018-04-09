@@ -260,6 +260,9 @@ void OctreeVolume::BuildMesh()
 	LOG("Total Deviation %f", m_octree->GetRootNode()->GetValueDeviation());
 	//m_octree->GetRootNode();
 
+	m_octree->BuildMesh(m_isoLevel, m_mesh);
+	return;
+
 
 	for (uint32 x = 0; x < GetResolution().x - 1; ++x)
 		for (uint32 y = 0; y < GetResolution().y - 1; ++y)

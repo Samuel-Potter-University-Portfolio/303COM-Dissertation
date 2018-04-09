@@ -38,32 +38,32 @@ public:
 	* Set all of the triangles indices for this mesh
 	* @param trangles		List of the indices for drawing a triangle
 	*/
-	void SetTriangles(std::vector<uint32>& triangles);
+	void SetTriangles(const std::vector<uint32>& triangles);
 
 	/**
 	* Store vertices into the correct buffer
 	* @param vertices		The vertex information to store
 	*/
-	inline void SetVertices(std::vector<vec3>& vertices) { SetBufferData(0, vertices.data(), vertices.size() * sizeof(vec3), 3, false); }
+	inline void SetVertices(const std::vector<vec3>& vertices) { SetBufferData(0, vertices.data(), vertices.size() * sizeof(vec3), 3, false); }
 
 	/**
 	* Store normals into the correct buffer
 	* @param normals		The vertex information to store
 	*/
-	inline void SetNormals(std::vector<vec3>& normals) { SetBufferData(1, normals.data(), normals.size() * sizeof(vec3), 3, false); }
+	inline void SetNormals(const std::vector<vec3>& normals) { SetBufferData(1, normals.data(), normals.size() * sizeof(vec3), 3, false); }
 
 	/**
 	* Store colours into the correct buffer
 	* @param colours		The vertex information to store
 	*/
-	inline void SetColours(std::vector<vec4>& colours) { SetBufferData(2, colours.data(), colours.size() * sizeof(vec4), 4, false); }
+	inline void SetColours(const std::vector<vec4>& colours) { SetBufferData(2, colours.data(), colours.size() * sizeof(vec4), 4, false); }
 
 	/**
 	* Store uvs into the correct buffer
 	* @param uvs			The vertex information to store
 	* @param channel		What channel to store the uv information in (0 - 10)
 	*/
-	inline void SetUVs(std::vector<vec2>& uvs, const uint32& channel = 0) { SetBufferData(3 + channel, uvs.data(), uvs.size() * sizeof(vec2), 2, false); }
+	inline void SetUVs(const std::vector<vec2>& uvs, const uint32& channel = 0) { SetBufferData(3 + channel, uvs.data(), uvs.size() * sizeof(vec2), 2, false); }
 
 
 private:

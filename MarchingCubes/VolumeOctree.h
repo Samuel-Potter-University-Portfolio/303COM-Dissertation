@@ -1,5 +1,6 @@
 #pragma once
 #include "Common.h"
+#include "MeshBuilder.h"
 #include <vector>
 
 
@@ -24,15 +25,35 @@ public:
 	OctreeVolumeNode(OctreeVolumeNode* parent);
 	virtual ~OctreeVolumeNode();
 
-	/// Set the value at this sub-coordinate
-	virtual void Set(uint32 x, uint32 y, uint32 z, float value) = 0;
-	/// Get the value at this sub-coordinate
+	/**
+	* Set the value for this coord
+	* @param x,y,z				The tree coords to set
+	* @param value				The desired value
+	* @param additions			An optional array to access any newly added nodes
+	*/
+	virtual void Set(uint32 x, uint32 y, uint32 z, float value, std::vector<OctreeVolumeNode*>* additions = nullptr) = 0;
+
+	/**
+	* Get the value for this coord
+	* @param x,y,z				The tree coords to get
+	* @returns The value at this node or DEFAULT_VALUE if no node exits
+	*/
 	virtual float Get(uint32 x, uint32 y, uint32 z) const = 0;
 
 	/// Calculate the average weight at this node
 	virtual float GetValueAverage() const = 0;
 	/// Calulate the standard deviation of the children of this node
 	virtual float GetValueDeviation() const = 0;
+
+
+	/**
+	* Attempt to construct a mesh for this node
+	* @param build				The builder to upload data to
+	* @param isoLevel			The isolevel cut-off to use for MC
+	* @param depthDeltaAcc		How much higher than this node can be considered
+	* @param depthDeltaDec		How much lower than this node can be considered 
+	*/
+	virtual void ConstructMesh(MeshBuilderMinimal& build, float isoLevel, int32 depthDeltaAcc, int32 depthDeltaDec) = 0;
 
 
 	///
@@ -74,11 +95,13 @@ public:
 	OctreeVolumeBranch(OctreeVolumeNode* parent);
 	virtual ~OctreeVolumeBranch();
 
-	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override;
+	virtual void Set(uint32 x, uint32 y, uint32 z, float value, std::vector<OctreeVolumeNode*>* additions = nullptr) override;
 	virtual float Get(uint32 x, uint32 y, uint32 z) const override;
 
 	virtual float GetValueAverage() const override { return m_valueAverage; }
 	virtual float GetValueDeviation() const override { return m_valueDeviation; }
+
+	virtual void ConstructMesh(MeshBuilderMinimal& build, float isoLevel, int32 depthDeltaAcc, int32 depthDeltaDec) override;
 
 	/**
 	* Fetch the root coordinates for this child
@@ -86,6 +109,14 @@ public:
 	* @returns The coordinates (In relation to the root) for the child
 	*/
 	uvec3 FetchRootCoords(const OctreeVolumeNode* child) const;
+
+	/**
+	* Fetch the value to during building for this coordinate
+	* @param source			The child who is requesting the value
+	* @param x,y,z			The relative coordinates (To the child) to fetch the value for
+	* @returns The value to use during building
+	*/
+	float FetchBuildIsolevel(const OctreeVolumeNode* source, int32 x, int32 y, int32 z) const;
 
 protected:
 	inline OctreeVolumeBranch* GetParentBranch() const { return (OctreeVolumeBranch*)GetParent(); }
@@ -116,11 +147,14 @@ public:
 	/** Called safely after this has been added to the tree */
 	void Init();
 
-	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override { m_value = value; }
+	virtual void Set(uint32 x, uint32 y, uint32 z, float value, std::vector<OctreeVolumeNode*>* additions = nullptr) override { m_value = value; }
 	virtual float Get(uint32 x, uint32 y, uint32 z) const override { return m_value; }
 
 	virtual float GetValueAverage() const override { return m_value; }
 	virtual float GetValueDeviation() const override { return 0.0f; }
+	
+	virtual void ConstructMesh(MeshBuilderMinimal& build, float isoLevel, int32 depthDeltaAcc, int32 depthDeltaDec) override;
+
 protected:
 	inline OctreeVolumeBranch* GetParentBranch() const { return (OctreeVolumeBranch*)GetParent(); }
 };
@@ -151,13 +185,17 @@ private:
 	/// General Vars
 	///
 	OctreeVolumeNode* m_root;
-	std::vector<OctreeDetailLevel> m_detailLevels;
+	//std::vector<OctreeDetailLevel> m_detailLevels;
+
+	std::vector<OctreeVolumeNode*> testLayer;
 
 public:
 	VolumeOctree(uint16 resolution);
 	~VolumeOctree();
 
-	inline void Set(uint32 x, uint32 y, uint32 z, float value) { m_root->Set(x, y, z, value); }
+	void BuildMesh(float isoLevel, Mesh* target);
+
+	void Set(uint32 x, uint32 y, uint32 z, float value);
 	inline float Get(uint32 x, uint32 y, uint32 z) const { return m_root->Get(x, y, z); }
 
 	inline OctreeVolumeNode* GetRootNode() const { return m_root; }

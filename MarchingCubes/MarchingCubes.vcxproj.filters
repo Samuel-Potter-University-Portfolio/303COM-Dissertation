@@ -126,6 +126,9 @@
     <ClCompile Include="OctreeVolume.cpp">
       <Filter>Source Files\Volume\Implementations</Filter>
     </ClCompile>
+    <ClCompile Include="MeshBuilder.cpp">
+      <Filter>Source Files\Engine\GL</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Logger.h">
@@ -211,6 +214,9 @@
     </ClInclude>
     <ClInclude Include="OctreeVolume.h">
       <Filter>Header Files\Volume\Implementations</Filter>
+    </ClInclude>
+    <ClInclude Include="MeshBuilder.h">
+      <Filter>Header Files\Engine\GL</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

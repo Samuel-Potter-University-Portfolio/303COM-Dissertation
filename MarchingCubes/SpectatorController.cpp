@@ -70,11 +70,11 @@ void SpectatorController::Begin()
 
 		// Flat platform
 		/*
-		volume->Init(uvec3(128, 128, 128), vec3(1, 1, 1), 0.0f);
-		for (int x = 0; x < 128; ++x)
-			for (int z = 0; z < 128; ++z)
+		volume->Init(uvec3(64, 64, 64), vec3(1, 1, 1));
+		for (int x = 0; x < 64; ++x)
+			for (int z = 0; z < 64; ++z)
 			{
-				volume->Set(x, 127, z, 1.0f);
+				volume->Set(x, 63, z, 1.0f);
 				volume->Set(x, 7, z, 0.5f);
 				volume->Set(x, 0, z, 1.0f);
 			}
