@@ -45,6 +45,12 @@ OctreeVolumeBranch::OctreeVolumeBranch(OctreeVolumeNode* parent) : OctreeVolumeN
 		LOG_ERROR("Branch node made with size(%i) <= 1", GetResolution());
 }
 
+void OctreeVolumeBranch::Init()
+{
+	OctreeVolumeBranch* parent = GetParentBranch();
+	m_coordinates = parent ? GetParentBranch()->FetchRootCoords(this) : uvec3(0, 0, 0);
+}
+
 OctreeVolumeBranch::~OctreeVolumeBranch()
 {
 	for (OctreeVolumeNode* child : children)
@@ -86,12 +92,10 @@ void OctreeVolumeBranch::Set(uint32 x, uint32 y, uint32 z, float value, std::vec
 		{
 			// HalfRes equals the res size of the new node, so make sure to check
 			if (halfRes == 1)
-			{
 				node = new OctreeVolumeLeaf(this);
-				((OctreeVolumeLeaf*)node)->Init();
-			}
 			else
 				node = new OctreeVolumeBranch(this);
+			node->Init();
 
 			// Add this new node to additions, if applicable
 			if (additions)
@@ -189,7 +193,7 @@ uvec3 OctreeVolumeBranch::FetchRootCoords(const OctreeVolumeNode* child) const
 	return parentBranch ? parentBranch->FetchRootCoords(this) + offset : offset;
 }
 
-float OctreeVolumeBranch::FetchBuildIsolevel(const OctreeVolumeNode* source, int32 x, int32 y, int32 z) const 
+float OctreeVolumeBranch::FetchBuildIsolevel(const OctreeVolumeNode* source, int32 maxDepth, int32 x, int32 y, int32 z) const
 {
 	ivec3 offset;
 	const int32 res = GetResolution();
@@ -226,7 +230,7 @@ float OctreeVolumeBranch::FetchBuildIsolevel(const OctreeVolumeNode* source, int
 	{
 		auto parent = GetParentBranch();
 		if (parent)
-			return parent->FetchBuildIsolevel(this, x, y, z);
+			return parent->FetchBuildIsolevel(this, maxDepth, x, y, z);
 		else
 			return UNKNOWN_BUILD_VALUE; // Most likely reached to of tree (So coord is bad)
 	}
@@ -234,15 +238,245 @@ float OctreeVolumeBranch::FetchBuildIsolevel(const OctreeVolumeNode* source, int
 	// Desired coord is inside of this node, so traverse down tree
 	else
 	{
-		// TODO - Max/Min depth checks
-		return Get(x, y, z);
+		return FetchBuildIsolevel(maxDepth, x, y, z);
 	}
+}
+
+float OctreeVolumeBranch::FetchBuildIsolevel(int32 maxDepth, int32 x, int32 y, int32 z) const 
+{
+	if (GetDepth() == maxDepth)
+		return GetValueAverage();
+
+
+	// Fetch appropriate child node
+	const uint16 halfRes = GetResolution() / 2;
+	bool isFront = (z >= halfRes);
+	bool isTop = (y >= halfRes);
+	bool isRight = (x >= halfRes);
+
+	uint32 index =
+		(isFront ? 4 : 0) +
+		(isTop ? 2 : 0) +
+		(isRight ? 1 : 0);
+	const OctreeVolumeNode* node = children[index];
+
+
+	// Node doesn't exist, so is assumed to be default value
+	if (node == nullptr)
+		return DEFAULT_VALUE;
+
+	
+	// Get appropriate value
+	const OctreeVolumeBranch* nodeAsBranch = dynamic_cast<const OctreeVolumeBranch*>(node);
+	if (nodeAsBranch)
+		nodeAsBranch->FetchBuildIsolevel(
+			maxDepth, 
+			isRight ? x - halfRes : x,
+			isTop ? y - halfRes : y,
+			isFront ? z - halfRes : z
+		);
+
+	// Must be at bottom of tree
+	else
+		return node->Get(
+			isRight ? x - halfRes : x,
+			isTop ? y - halfRes : y,
+			isFront ? z - halfRes : z
+		);
 }
 
 void OctreeVolumeBranch::ConstructMesh(MeshBuilderMinimal& build, float isoLevel, int32 depthDeltaAcc, int32 depthDeltaDec) 
 {
-	// TODO
+	OctreeVolumeBranch* parent = GetParentBranch();
+	if (parent == nullptr)
+		return;
+
+	// Cache vars
+	const vec3 worldCoord = m_coordinates;
+	const float resf = (float)GetResolution();
+	const int32 maxDepth = GetDepth() - depthDeltaDec;
+
+
+	// Fetch neighbor values and/or cache them
+	std::unordered_map<ivec3, float, ivec3_KeyFuncs> cachedValues;
+	auto FetchValue = [this, parent, maxDepth, cachedValues](int32 x, int32 y, int32 z) mutable
+	{
+		if (x == 0 && y == 0 && z == 0)
+			return GetValueAverage();
+
+		const ivec3 key = ivec3(x, y, z);
+
+		// Fetch cached value
+		auto it = cachedValues.find(key);
+		if (it != cachedValues.end())
+			return it->second;
+
+		// Calculate and cache value
+		const int32 r = GetResolution();
+		float value = parent->FetchBuildIsolevel(this, maxDepth, x*r, y*r, z*r);
+		cachedValues[key] = value;
+		return value;
+	};
+
+
+	uint8 caseIndex = 0;
+	float v000 = FetchValue(0, 0, 0);
+	float v001 = FetchValue(0, 0, 1);
+	float v010 = FetchValue(0, 1, 0);
+	float v011 = FetchValue(0, 1, 1);
+	float v100 = FetchValue(1, 0, 0);
+	float v101 = FetchValue(1, 0, 1);
+	float v110 = FetchValue(1, 1, 0);
+	float v111 = FetchValue(1, 1, 1);
+
+	if (v000 >= isoLevel) caseIndex |= 1;
+	if (v100 >= isoLevel) caseIndex |= 2;
+	if (v101 >= isoLevel) caseIndex |= 4;
+	if (v001 >= isoLevel) caseIndex |= 8;
+	if (v010 >= isoLevel) caseIndex |= 16;
+	if (v110 >= isoLevel) caseIndex |= 32;
+	if (v111 >= isoLevel) caseIndex |= 64;
+	if (v011 >= isoLevel) caseIndex |= 128;
+
+
+	// Fully inside iso-surface
+	if (caseIndex == 0 || caseIndex == 255)
+		return;
+
+	// Smooth edges based on density
+#define VERT_LERP(x0, y0, z0, x1, y1, z1) MC::VertexLerp(isoLevel, worldCoord + vec3(x0, y0, z0)*resf, worldCoord + vec3(x1, y1, z1)*resf, v ## x0 ## y0 ## z0, v ## x1 ## y1 ## z1);
+#define NORM_LERP(x0, y0, z0, x1, y1, z1) vec3()/*glm::normalize(\
+	FetchValue(x0,y0,z0) > isoLevel ? vec3( \
+		FetchValue(x0 - 1, y0, z0) - FetchValue(x0 + 1, y0, z0), \
+		FetchValue(x0, y0 - 1, z0) - FetchValue(x0, y0 + 1, z0), \
+		FetchValue(x0, y0, z0 - 1) - FetchValue(x0, y0, z0 + 1) \
+	) : vec3( \
+		FetchValue(x1 - 1, y1, z1) - FetchValue(x1 + 1, y1, z1), \
+		FetchValue(x1, y1 - 1, z1) - FetchValue(x1, y1 + 1, z1), \
+		FetchValue(x1, y1, z1 - 1) - FetchValue(x1, y1, z1 + 1) \
+	))*/
+
+	vec3 edges[12];
+	vec3 norms[12];
+
+	if (MC::CaseRequiredEdges[caseIndex] & 1)
+	{
+		edges[0] = VERT_LERP(0, 0, 0, 1, 0, 0);
+		norms[0] = NORM_LERP(0, 0, 0, 1, 0, 0);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 2)
+	{
+		edges[1] = VERT_LERP(1, 0, 0, 1, 0, 1);
+		norms[1] = NORM_LERP(1, 0, 0, 1, 0, 1);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 4)
+	{
+		edges[2] = VERT_LERP(0, 0, 1, 1, 0, 1);
+		norms[2] = NORM_LERP(0, 0, 1, 1, 0, 1);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 8)
+	{
+		edges[3] = VERT_LERP(0, 0, 0, 0, 0, 1);
+		norms[3] = NORM_LERP(0, 0, 0, 0, 0, 1);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 16)
+	{
+		edges[4] = VERT_LERP(0, 1, 0, 1, 1, 0);
+		norms[4] = NORM_LERP(0, 1, 0, 1, 1, 0);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 32)
+	{
+		edges[5] = VERT_LERP(1, 1, 0, 1, 1, 1);
+		norms[5] = NORM_LERP(1, 1, 0, 1, 1, 1);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 64)
+	{
+		edges[6] = VERT_LERP(0, 1, 1, 1, 1, 1);
+		norms[6] = NORM_LERP(0, 1, 1, 1, 1, 1);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 128)
+	{
+		edges[7] = VERT_LERP(0, 1, 0, 0, 1, 1);
+		norms[7] = NORM_LERP(0, 1, 0, 0, 1, 1);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 256)
+	{
+		edges[8] = VERT_LERP(0, 0, 0, 0, 1, 0);
+		norms[8] = NORM_LERP(0, 0, 0, 0, 1, 0);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 512)
+	{
+		edges[9] = VERT_LERP(1, 0, 0, 1, 1, 0);
+		norms[9] = NORM_LERP(1, 0, 0, 1, 1, 0);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 1024)
+	{
+		edges[10] = VERT_LERP(1, 0, 1, 1, 1, 1);
+		norms[10] = NORM_LERP(1, 0, 1, 1, 1, 1);
+	}
+	if (MC::CaseRequiredEdges[caseIndex] & 2048)
+	{
+		edges[11] = VERT_LERP(0, 0, 1, 0, 1, 1);
+		norms[11] = NORM_LERP(0, 0, 1, 0, 1, 1);
+	}
+
+
+	// Add triangles for this case
+	int8* caseEdges = MC::Cases[caseIndex];
+	while (*caseEdges != -1)
+	{
+		int8 edge0 = *(caseEdges++);
+		int8 edge1 = *(caseEdges++);
+		int8 edge2 = *(caseEdges++);
+
+		uint32 a = build.AddVertex(edges[edge0]);// , norms[edge0]);
+		uint32 b = build.AddVertex(edges[edge1]);// , norms[edge1]);
+		uint32 c = build.AddVertex(edges[edge2]);// , norms[edge2]);
+
+		build.AddTriangle(a, b, c);
+	}
 }
+
+void OctreeVolumeBranch::ConstructDebugMesh(MeshBuilderMinimal& build, float isoLevel)
+{
+	if (GetValueAverage() < isoLevel)
+		return;
+
+
+	const vec3 pos = m_coordinates;
+	const float res = GetResolution();
+
+	uint32 i000 = build.AddVertex(pos + vec3(0, 0, 0) * res);
+	uint32 i001 = build.AddVertex(pos + vec3(0, 0, 1) * res);
+	uint32 i010 = build.AddVertex(pos + vec3(0, 1, 0) * res);
+	uint32 i011 = build.AddVertex(pos + vec3(0, 1, 1) * res);
+	uint32 i100 = build.AddVertex(pos + vec3(1, 0, 0) * res);
+	uint32 i101 = build.AddVertex(pos + vec3(1, 0, 1) * res);
+	uint32 i110 = build.AddVertex(pos + vec3(1, 1, 0) * res);
+	uint32 i111 = build.AddVertex(pos + vec3(1, 1, 1) * res);
+
+
+	build.AddTriangle(i000, i001, i011);
+	build.AddTriangle(i000, i011, i010);
+	build.AddTriangle(i100, i101, i111);
+	build.AddTriangle(i100, i111, i110);
+
+	build.AddTriangle(i000, i001, i101);
+	build.AddTriangle(i000, i101, i100);
+	build.AddTriangle(i010, i011, i111);
+	build.AddTriangle(i010, i111, i110);
+
+	build.AddTriangle(i000, i010, i110);
+	build.AddTriangle(i000, i110, i100);
+	build.AddTriangle(i001, i011, i111);
+	build.AddTriangle(i001, i111, i101);
+
+	for (OctreeVolumeNode* child : children)
+		if (child)
+			child->ConstructDebugMesh(build, isoLevel);
+}
+
+
 
 ///
 /// Leaf
@@ -266,16 +500,42 @@ void OctreeVolumeLeaf::ConstructMesh(MeshBuilderMinimal& build, float isoLevel, 
 	if (parent == nullptr)
 		return;
 
+	// Cache vars
+	const vec3 worldCoord = m_coordinates;
+	const float resf = (float)GetResolution();
+	const int32 maxDepth = GetDepth() - depthDeltaDec;
+
+
+	// Fetch neighbor values and/or cache them
+	std::unordered_map<ivec3, float, ivec3_KeyFuncs> cachedValues;
+	auto FetchValue = [this, parent, maxDepth, cachedValues](int32 x, int32 y, int32 z) mutable
+	{
+		if (x == 0 && y == 0 && z == 0)
+			return GetValueAverage();
+
+		const ivec3 key = ivec3(x, y, z);
+
+		// Fetch cached value
+		auto it = cachedValues.find(key);
+		if (it != cachedValues.end())
+			return it->second;
+		
+		// Calculate and cache value
+		float value = parent->FetchBuildIsolevel(this, maxDepth, x, y, z);
+		cachedValues[key] = value;
+		return value;
+	};
+
 
 	uint8 caseIndex = 0;
-	float v000 = m_value;
-	float v001 = parent->FetchBuildIsolevel(this, 0, 0, 1);
-	float v010 = parent->FetchBuildIsolevel(this, 0, 1, 0);
-	float v011 = parent->FetchBuildIsolevel(this, 0, 1, 1);
-	float v100 = parent->FetchBuildIsolevel(this, 1, 0, 0);
-	float v101 = parent->FetchBuildIsolevel(this, 1, 0, 1);
-	float v110 = parent->FetchBuildIsolevel(this, 1, 1, 0);
-	float v111 = parent->FetchBuildIsolevel(this, 1, 1, 1);
+	float v000 = FetchValue(0, 0, 0);
+	float v001 = FetchValue(0, 0, 1);
+	float v010 = FetchValue(0, 1, 0);
+	float v011 = FetchValue(0, 1, 1);
+	float v100 = FetchValue(1, 0, 0);
+	float v101 = FetchValue(1, 0, 1);
+	float v110 = FetchValue(1, 1, 0);
+	float v111 = FetchValue(1, 1, 1);
 
 	if (v000 >= isoLevel) caseIndex |= 1;
 	if (v100 >= isoLevel) caseIndex |= 2;
@@ -292,35 +552,81 @@ void OctreeVolumeLeaf::ConstructMesh(MeshBuilderMinimal& build, float isoLevel, 
 		return;
 
 	// Smooth edges based on density
-	vec3 worldCoord = m_coordinates;
-	float resf = (float)GetResolution();
 #define VERT_LERP(x0, y0, z0, x1, y1, z1) MC::VertexLerp(isoLevel, worldCoord + vec3(x0, y0, z0)*resf, worldCoord + vec3(x1, y1, z1)*resf, v ## x0 ## y0 ## z0, v ## x1 ## y1 ## z1);
-	vec3 edges[12];
+#define NORM_LERP(x0, y0, z0, x1, y1, z1) vec3()/*glm::normalize(\
+	FetchValue(x0,y0,z0) > isoLevel ? vec3( \
+		FetchValue(x0 - 1, y0, z0) - FetchValue(x0 + 1, y0, z0), \
+		FetchValue(x0, y0 - 1, z0) - FetchValue(x0, y0 + 1, z0), \
+		FetchValue(x0, y0, z0 - 1) - FetchValue(x0, y0, z0 + 1) \
+	) : vec3( \
+		FetchValue(x1 - 1, y1, z1) - FetchValue(x1 + 1, y1, z1), \
+		FetchValue(x1, y1 - 1, z1) - FetchValue(x1, y1 + 1, z1), \
+		FetchValue(x1, y1, z1 - 1) - FetchValue(x1, y1, z1 + 1) \
+	))*/
 
+	vec3 edges[12]; 
+	vec3 norms[12];
+	
 	if (MC::CaseRequiredEdges[caseIndex] & 1)
+	{
 		edges[0] = VERT_LERP(0, 0, 0, 1, 0, 0);
+		norms[0] = NORM_LERP(0, 0, 0, 1, 0, 0);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 2)
+	{
 		edges[1] = VERT_LERP(1, 0, 0, 1, 0, 1);
+		norms[1] = NORM_LERP(1, 0, 0, 1, 0, 1);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 4)
+	{
 		edges[2] = VERT_LERP(0, 0, 1, 1, 0, 1);
+		norms[2] = NORM_LERP(0, 0, 1, 1, 0, 1);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 8)
+	{
 		edges[3] = VERT_LERP(0, 0, 0, 0, 0, 1);
+		norms[3] = NORM_LERP(0, 0, 0, 0, 0, 1);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 16)
+	{
 		edges[4] = VERT_LERP(0, 1, 0, 1, 1, 0);
+		norms[4] = NORM_LERP(0, 1, 0, 1, 1, 0);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 32)
+	{
 		edges[5] = VERT_LERP(1, 1, 0, 1, 1, 1);
+		norms[5] = NORM_LERP(1, 1, 0, 1, 1, 1);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 64)
+	{
 		edges[6] = VERT_LERP(0, 1, 1, 1, 1, 1);
+		norms[6] = NORM_LERP(0, 1, 1, 1, 1, 1);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 128)
+	{
 		edges[7] = VERT_LERP(0, 1, 0, 0, 1, 1);
+		norms[7] = NORM_LERP(0, 1, 0, 0, 1, 1);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 256)
+	{
 		edges[8] = VERT_LERP(0, 0, 0, 0, 1, 0);
+		norms[8] = NORM_LERP(0, 0, 0, 0, 1, 0);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 512)
+	{
 		edges[9] = VERT_LERP(1, 0, 0, 1, 1, 0);
+		norms[9] = NORM_LERP(1, 0, 0, 1, 1, 0);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 1024)
+	{
 		edges[10] = VERT_LERP(1, 0, 1, 1, 1, 1);
+		norms[10] = NORM_LERP(1, 0, 1, 1, 1, 1);
+	}
 	if (MC::CaseRequiredEdges[caseIndex] & 2048)
+	{
 		edges[11] = VERT_LERP(0, 0, 1, 0, 1, 1);
+		norms[11] = NORM_LERP(0, 0, 1, 0, 1, 1);
+	}
 	
 
 	// Add triangles for this case
@@ -331,13 +637,48 @@ void OctreeVolumeLeaf::ConstructMesh(MeshBuilderMinimal& build, float isoLevel, 
 		int8 edge1 = *(caseEdges++);
 		int8 edge2 = *(caseEdges++);
 
-		uint32 a = build.AddVertex(edges[edge0]);
-		uint32 b = build.AddVertex(edges[edge1]);
-		uint32 c = build.AddVertex(edges[edge2]);
+		uint32 a = build.AddVertex(edges[edge0]);// , norms[edge0]);
+		uint32 b = build.AddVertex(edges[edge1]);// , norms[edge1]);
+		uint32 c = build.AddVertex(edges[edge2]);// , norms[edge2]);
 
 		build.AddTriangle(a, b, c);
 	}
 }
+
+void OctreeVolumeLeaf::ConstructDebugMesh(MeshBuilderMinimal& build, float isoLevel)
+{
+	if (m_value < isoLevel)
+		return;
+
+	const vec3 pos = m_coordinates;
+	const float res = GetResolution();
+
+	uint32 i000 = build.AddVertex(pos + vec3(0, 0, 0) * res);
+	uint32 i001 = build.AddVertex(pos + vec3(0, 0, 1) * res);
+	uint32 i010 = build.AddVertex(pos + vec3(0, 1, 0) * res);
+	uint32 i011 = build.AddVertex(pos + vec3(0, 1, 1) * res);
+	uint32 i100 = build.AddVertex(pos + vec3(1, 0, 0) * res);
+	uint32 i101 = build.AddVertex(pos + vec3(1, 0, 1) * res);
+	uint32 i110 = build.AddVertex(pos + vec3(1, 1, 0) * res);
+	uint32 i111 = build.AddVertex(pos + vec3(1, 1, 1) * res);
+
+
+	build.AddTriangle(i000, i001, i011);
+	build.AddTriangle(i000, i011, i010);
+	build.AddTriangle(i100, i101, i111);
+	build.AddTriangle(i100, i111, i110);
+
+	build.AddTriangle(i000, i001, i101);
+	build.AddTriangle(i000, i101, i100);
+	build.AddTriangle(i010, i011, i111);
+	build.AddTriangle(i010, i111, i110);
+
+	build.AddTriangle(i000, i010, i110);
+	build.AddTriangle(i000, i110, i100);
+	build.AddTriangle(i001, i011, i111);
+	build.AddTriangle(i001, i111, i101);
+}
+
 
 
 ///
@@ -375,6 +716,17 @@ void VolumeOctree::Set(uint32 x, uint32 y, uint32 z, float value)
 
 	// Add all nodes in bottom layer
 	for (OctreeVolumeNode* node : newNodes)
-		if (node->GetResolution() == 1)
+		if (node->GetResolution() == 4)
 			testLayer.push_back(node);
+}
+
+void VolumeOctree::BuildTreeMesh(float isoLevel, Mesh* target)
+{
+	MeshBuilderMinimal builder;
+	builder.MarkDynamic();
+
+	for (OctreeVolumeNode* node : testLayer)
+		node->ConstructDebugMesh(builder, isoLevel);
+
+	builder.BuildMesh(target);
 }

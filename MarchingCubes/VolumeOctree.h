@@ -25,6 +25,11 @@ public:
 	OctreeVolumeNode(OctreeVolumeNode* parent);
 	virtual ~OctreeVolumeNode();
 
+	/** 
+	* Called safely after this has been added to the tree 
+	*/
+	virtual void Init() = 0;
+
 	/**
 	* Set the value for this coord
 	* @param x,y,z				The tree coords to set
@@ -47,6 +52,13 @@ public:
 
 
 	/**
+	* Constructs a mesh to view the octree
+	* @param build				The builder to upload data to
+	* @param isoLevel			The isolevel cut-off to use for MC
+	*/
+	virtual void ConstructDebugMesh(MeshBuilderMinimal& build, float isoLevel) = 0;
+
+	/**
 	* Attempt to construct a mesh for this node
 	* @param build				The builder to upload data to
 	* @param isoLevel			The isolevel cut-off to use for MC
@@ -54,6 +66,8 @@ public:
 	* @param depthDeltaDec		How much lower than this node can be considered 
 	*/
 	virtual void ConstructMesh(MeshBuilderMinimal& build, float isoLevel, int32 depthDeltaAcc, int32 depthDeltaDec) = 0;
+
+
 
 
 	///
@@ -87,6 +101,7 @@ public:
 	OctreeVolumeNode*& c111 = children[7]; // front top right
 
 private:
+	uvec3 m_coordinates;
 	float m_valueAverage;
 	float m_valueDeviation;
 
@@ -95,12 +110,15 @@ public:
 	OctreeVolumeBranch(OctreeVolumeNode* parent);
 	virtual ~OctreeVolumeBranch();
 
+	virtual void Init() override;
+
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value, std::vector<OctreeVolumeNode*>* additions = nullptr) override;
 	virtual float Get(uint32 x, uint32 y, uint32 z) const override;
 
 	virtual float GetValueAverage() const override { return m_valueAverage; }
 	virtual float GetValueDeviation() const override { return m_valueDeviation; }
 
+	virtual void ConstructDebugMesh(MeshBuilderMinimal& build, float isoLevel) override;
 	virtual void ConstructMesh(MeshBuilderMinimal& build, float isoLevel, int32 depthDeltaAcc, int32 depthDeltaDec) override;
 
 	/**
@@ -113,10 +131,21 @@ public:
 	/**
 	* Fetch the value to during building for this coordinate
 	* @param source			The child who is requesting the value
+	* @param maxDepth		The max depth to look at
 	* @param x,y,z			The relative coordinates (To the child) to fetch the value for
 	* @returns The value to use during building
 	*/
-	float FetchBuildIsolevel(const OctreeVolumeNode* source, int32 x, int32 y, int32 z) const;
+	float FetchBuildIsolevel(const OctreeVolumeNode* source, int32 maxDepth, int32 x, int32 y, int32 z) const;
+
+
+	/**
+	* Fetch the value to during building for this coordinate
+	* @param maxDepth		The max depth to look at
+	* @param x,y,z			The coordinates to fetch the value for (Assuming they're withing correct range)
+	* @returns The value to use during building
+	*/
+	float FetchBuildIsolevel(int32 maxDepth, int32 x, int32 y, int32 z) const;
+
 
 protected:
 	inline OctreeVolumeBranch* GetParentBranch() const { return (OctreeVolumeBranch*)GetParent(); }
@@ -144,15 +173,15 @@ public:
 	OctreeVolumeLeaf(OctreeVolumeNode* parent);
 	virtual ~OctreeVolumeLeaf();
 
-	/** Called safely after this has been added to the tree */
-	void Init();
+	virtual void Init() override;
 
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value, std::vector<OctreeVolumeNode*>* additions = nullptr) override { m_value = value; }
 	virtual float Get(uint32 x, uint32 y, uint32 z) const override { return m_value; }
 
 	virtual float GetValueAverage() const override { return m_value; }
 	virtual float GetValueDeviation() const override { return 0.0f; }
-	
+
+	virtual void ConstructDebugMesh(MeshBuilderMinimal& build, float isoLevel) override;
 	virtual void ConstructMesh(MeshBuilderMinimal& build, float isoLevel, int32 depthDeltaAcc, int32 depthDeltaDec) override;
 
 protected:
@@ -194,6 +223,7 @@ public:
 	~VolumeOctree();
 
 	void BuildMesh(float isoLevel, Mesh* target);
+	void BuildTreeMesh(float isoLevel, Mesh* target);
 
 	void Set(uint32 x, uint32 y, uint32 z, float value);
 	inline float Get(uint32 x, uint32 y, uint32 z) const { return m_root->Get(x, y, z); }
