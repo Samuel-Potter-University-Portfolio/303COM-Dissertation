@@ -41,7 +41,7 @@ void SpectatorController::Begin()
 
 	// Set default volume
 	LOG("Setting up initial volume");
-	IVolumeData* volume = GetLevel()->FindObject<IVolumeData>();
+	IVoxelVolume* volume = GetLevel()->FindObject<IVoxelVolume>();
 	if (volume != nullptr)
 	{
 		//volume->LoadFromPvmFile("Resources/Lobster.pvm");
@@ -50,7 +50,7 @@ void SpectatorController::Begin()
 		//*
 		const uint32 radius = 100;
 		const uint32 diametre = radius * 2;
-		volume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1), 0.0f);
+		volume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1));
 
 		for (int x = 0; x < diametre; ++x)
 			for (int y = 0; y < diametre; ++y)
@@ -80,8 +80,6 @@ void SpectatorController::Begin()
 			}
 			//*/
 	}
-
-	LOG("Spawned in SpectatorController");
 }
 
 SpectatorController::~SpectatorController() 
@@ -96,7 +94,7 @@ void SpectatorController::Update(const float& deltaTime)
 {
 	Keyboard* keyboard = GetEngine()->GetWindow()->GetKeyboard();
 	Mouse* mouse = GetEngine()->GetWindow()->GetMouse();
-	IVolumeData* volume = GetLevel()->FindObject<IVolumeData>();
+	IVoxelVolume* volume = GetLevel()->FindObject<IVoxelVolume>();
 
 	const float speed = 30.0f * deltaTime;
 

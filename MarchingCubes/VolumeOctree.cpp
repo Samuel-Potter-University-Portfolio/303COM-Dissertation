@@ -1,5 +1,6 @@
 #include "VolumeOctree.h"
 #include "Logger.h"
+#include "VoxelVolume.h"
 
 
 
@@ -82,7 +83,10 @@ void OctreeVolumeBranch::Set(uint32 x, uint32 y, uint32 z, float value)
 		{
 			// HalfRes equals the res size of the new node, so make sure to check
 			if (halfRes == 1)
+			{
 				node = new OctreeVolumeLeaf(this);
+				((OctreeVolumeLeaf*)node)->Init();
+			}
 			else
 				node = new OctreeVolumeBranch(this);
 		}
@@ -152,16 +156,47 @@ void OctreeVolumeBranch::RecalculateStats()
 }
 
 
+uvec3 OctreeVolumeBranch::FetchRootCoords(const OctreeVolumeNode* child) const 
+{
+	uvec3 offset;
+	const uint32 halfRes = GetResolution() / 2;
+
+	if (child == c000)
+		offset = uvec3(0, 0, 0) * halfRes;
+	else if (child == c001)
+		offset = uvec3(1, 0, 0) * halfRes;
+	else if (child == c010)
+		offset = uvec3(0, 1, 0) * halfRes;
+	else if (child == c011)
+		offset = uvec3(1, 1, 0) * halfRes;
+	else if (child == c100)
+		offset = uvec3(0, 0, 1) * halfRes;
+	else if (child == c101)
+		offset = uvec3(1, 0, 1) * halfRes;
+	else if (child == c110)
+		offset = uvec3(0, 1, 1) * halfRes;
+	else if (child == c111)
+		offset = uvec3(1, 1, 1) * halfRes;
+
+	OctreeVolumeBranch* parentBranch = GetParentBranch();
+	return parentBranch ? parentBranch->FetchRootCoords(this) + offset : offset;
+}
+
 
 ///
 /// Leaf
 ///
 
-OctreeVolumeLeaf::OctreeVolumeLeaf(OctreeVolumeNode* parent) : OctreeVolumeNode(parent)
+OctreeVolumeLeaf::OctreeVolumeLeaf(OctreeVolumeNode* parent) : OctreeVolumeNode(parent), m_value(DEFAULT_VALUE)
 {
 }
 OctreeVolumeLeaf::~OctreeVolumeLeaf() 
 {
+}
+
+void OctreeVolumeLeaf::Init() 
+{
+	m_coordinates = GetParentBranch()->FetchRootCoords(this);
 }
 
 
@@ -172,10 +207,11 @@ OctreeVolumeLeaf::~OctreeVolumeLeaf()
 VolumeOctree::VolumeOctree(uint16 resolution)
 {
 	if (resolution == 1)
-		m_root = new OctreeVolumeLeaf(nullptr);
-	else
-		m_root = new OctreeVolumeBranch(resolution);
+		resolution = 2;
+	
+	m_root = new OctreeVolumeBranch(resolution);
 }
 VolumeOctree::~VolumeOctree()
 {
+	delete m_root;
 }

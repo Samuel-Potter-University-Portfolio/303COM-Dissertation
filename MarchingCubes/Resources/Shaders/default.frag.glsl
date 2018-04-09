@@ -26,15 +26,16 @@ void main()
 
 
 	// Thicker line
-	vec3 colour = vec3(1,1,1);
-	vec3 tile = mod(passPos, 1.0);
-	if(tile.x > 0.96)
-		colour.x = 0;
-	if(tile.y > 0.96)
-		colour.y = 0;
-	if(tile.z > 0.96)
-		colour.z = 0;
+	//vec3 colour = vec3(1,1,1);
+	//vec3 tile = mod(passPos, 1.0);
+	//if(tile.x > 0.96)
+	//	colour.x = 0;
+	//if(tile.y > 0.96)
+	//	colour.y = 0;
+	//if(tile.z > 0.96)
+	//	colour.z = 0;
 
+	vec3 colour = vec3(1,1,1);
 	outColour.rgb = colour * (diffuse0);
 	outColour.a = 1.0;
 }

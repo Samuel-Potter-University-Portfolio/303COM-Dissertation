@@ -1,209 +1,173 @@
 #include "VoxelVolume.h"
-#include "MarchingCubes.h"
 
-#include <unordered_map>
-#include "DefaultMaterial.h"
+#include "Logger.h"
+#include "PVM/ddsbase.h"
 
-
-#define GLM_ENABLE_EXPERIMENTAL
-#include <gtx\vector_angle.hpp>
+#include <fstream>
 
 
-VoxelVolume::VoxelVolume()
+bool IVoxelVolume::LoadFromPvmFile(const char* file)
 {
-	m_isoLevel = 0.15f;
-}
+	uint8* volume;
+	uint32 width, height, depth, components;
+	vec3 scale;
 
-VoxelVolume::~VoxelVolume()
-{
-	if (m_data != nullptr)
-		delete[] m_data;
-	if (m_mesh != nullptr)
-		delete m_mesh;
-	if (m_material != nullptr)
-		delete m_material;
-}
-
-
-///
-/// Volume Data Overrides
-///
-void VoxelVolume::Init(const uvec3& resolution, const vec3& scale, float defaultValue)
-{
-	m_data = new float[resolution.x * resolution.y * resolution.z]{ defaultValue };
-	m_resolution = resolution;
-	m_scale = scale;
-}
-
-void VoxelVolume::Set(uint32 x, uint32 y, uint32 z, float value) 
-{
-	m_data[GetIndex(x, y, z)] = value;
-	bRequiresRebuild = true;
-}
-
-float VoxelVolume::Get(uint32 x, uint32 y, uint32 z) 
-{
-	return m_data[GetIndex(x, y, z)];
-}
-
-
-///
-/// Object functions
-///
-
-void VoxelVolume::Begin() 
-{
-	m_material = new DefaultMaterial;
-
-	m_mesh = new Mesh;
-	m_mesh->MarkDynamic();
-
-	BuildMesh();
-}
-
-void VoxelVolume::Update(const float& deltaTime) 
-{
-	// Rebuild mesh if it needs it
-	if (bRequiresRebuild)
+	if ((volume = readPVMvolume(file, &width, &height, &depth, &components, &scale.x, &scale.y, &scale.z)) == nullptr)
 	{
-		BuildMesh();
-		bRequiresRebuild = false;
+		LOG_ERROR("Failed to load '%s'", file);
+		return false;
 	}
-}
 
-void VoxelVolume::Draw(const class Window* window, const float& deltaTime) 
-{
-	if (m_mesh != nullptr)
-	{
-		m_material->Bind(window, GetLevel());
-		m_material->PrepareMesh(m_mesh);
+	if (components > 2)
+		LOG_WARNING("Cannot currently support %i components for volumes '%s'", components, file);
 
-		Transform t;
-		// TODO - Support raycasting into scaling
-		//t.SetScale(m_data.GetScale());
-		m_material->RenderInstance(&t);
 
-		m_material->Unbind(window, GetLevel());
-	}
-}
+	// Convert binary data into float data
+	Init(uvec3(width, height, depth), scale);
 
-void VoxelVolume::BuildMesh() 
-{
-	std::unordered_map<vec3, uint32, vec3_KeyFuncs> vertexIndexLookup;
-	vec3 edges[12];
-
-	std::vector<vec3> vertices;
-	std::vector<vec3> normals;
-	std::vector<uint32> triangles;
-
-	for (uint32 x = 0; x < GetResolution().x - 1; ++x)
-		for (uint32 y = 0; y < GetResolution().y - 1; ++y)
-			for (uint32 z = 0; z < GetResolution().z - 1; ++z)
+	uint8* data = volume;
+	for (uint32 z = 0; z < depth; ++z)
+		for (uint32 y = 0; y < height; ++y)
+			for (uint32 x = 0; x < width; ++x)
 			{
-				// Encode case based on bit presence
-				uint8 caseIndex = 0;
-				if (Get(x + 0, y + 0, z + 0) >= m_isoLevel) caseIndex |= 1;
-				if (Get(x + 1, y + 0, z + 0) >= m_isoLevel) caseIndex |= 2;
-				if (Get(x + 1, y + 0, z + 1) >= m_isoLevel) caseIndex |= 4;
-				if (Get(x + 0, y + 0, z + 1) >= m_isoLevel) caseIndex |= 8;
-				if (Get(x + 0, y + 1, z + 0) >= m_isoLevel) caseIndex |= 16;
-				if (Get(x + 1, y + 1, z + 0) >= m_isoLevel) caseIndex |= 32;
-				if (Get(x + 1, y + 1, z + 1) >= m_isoLevel) caseIndex |= 64;
-				if (Get(x + 0, y + 1, z + 1) >= m_isoLevel) caseIndex |= 128;
-			
 
-				// Fully inside iso-surface
-				if (caseIndex == 0 || caseIndex == 255)
-					continue;
-
-				// Smooth edges based on density
-#define VERT_LERP(x0, y0, z0, x1, y1, z1) MC::VertexLerp(m_isoLevel, vec3(x + x0,y + y0,z + z0), vec3(x + x1, y + y1, z + z1), Get(x + x0, y + y0, z + z0), Get(x + x1, y + y1, z + z1))
-				
-				if (MC::CaseRequiredEdges[caseIndex] & 1)
-					edges[0] = VERT_LERP(0,0,0, 1,0,0);
-				if (MC::CaseRequiredEdges[caseIndex] & 2)
-					edges[1] = VERT_LERP(1,0,0, 1,0,1);
-				if (MC::CaseRequiredEdges[caseIndex] & 4)
-					edges[2] = VERT_LERP(0,0,1, 1,0,1);
-				if (MC::CaseRequiredEdges[caseIndex] & 8)
-					edges[3] = VERT_LERP(0,0,0, 0,0,1);
-				if (MC::CaseRequiredEdges[caseIndex] & 16)
-					edges[4] = VERT_LERP(0,1,0, 1,1,0);
-				if (MC::CaseRequiredEdges[caseIndex] & 32)
-					edges[5] = VERT_LERP(1,1,0, 1,1,1);
-				if (MC::CaseRequiredEdges[caseIndex] & 64)
-					edges[6] = VERT_LERP(0,1,1, 1,1,1);
-				if (MC::CaseRequiredEdges[caseIndex] & 128)
-					edges[7] = VERT_LERP(0,1,0, 0,1,1);
-				if (MC::CaseRequiredEdges[caseIndex] & 256)
-					edges[8] = VERT_LERP(0,0,0, 0,1,0);
-				if (MC::CaseRequiredEdges[caseIndex] & 512)
-					edges[9] = VERT_LERP(1,0,0, 1,1,0);
-				if (MC::CaseRequiredEdges[caseIndex] & 1024)
-					edges[10] = VERT_LERP(1,0,1, 1,1,1);
-				if (MC::CaseRequiredEdges[caseIndex] & 2048)
-					edges[11] = VERT_LERP(0,0,1, 0,1,1);
-
-
-				// Add triangles for this case
-				int8* caseEdges = MC::Cases[caseIndex];
-				while (*caseEdges != -1)
+				if (components == 1)
 				{
-					int8 edge = *(caseEdges++);
-					vec3 vert = edges[edge];
-
-
-					// Reuse old vertex (Lets us do normal smoothing)
-					auto it = vertexIndexLookup.find(vert);
-					if (it != vertexIndexLookup.end())
-					{
-						triangles.emplace_back(it->second);
-					}
-					else
-					{
-						const uint32 index = vertices.size();
-						triangles.emplace_back(index);
-						vertices.emplace_back(vert);
-
-						vertexIndexLookup[vert] = index;
-					}
-
+					Set(x, y, z, (float)(*data) / 255.0f);
+					data++;
+				}
+				else if (components == 2)
+				{
+					uint16* d = (uint16*)(data);
+					Set(x, y, z, (float)(*d) / 65535);
+					data += 2;
 				}
 			}
 
 
-	// Make normals out of weighted triangles
-	std::unordered_map<uint32, vec3> normalLookup;
+	free(volume);
+	return true;
+}
 
-	// Generate normals from triss
-	for (uint32 i = 0; i < triangles.size(); i += 3)
-	{
-		uint32 ai = triangles[i];
-		uint32 bi = triangles[i + 1];
-		uint32 ci = triangles[i + 2];
+bool IVoxelVolume::Raycast(const Ray& ray, VoxelHitInfo& hit, float maxDistance)
+{
+	// Source: https://gist.github.com/yamamushi/5823518
+	// Bresenham Line Algorithm 3D
 
-		vec3 a = vertices[ai];
-		vec3 b = vertices[bi];
-		vec3 c = vertices[ci];
+	ivec3 a(
+		round(ray.GetOrigin().x),
+		round(ray.GetOrigin().y),
+		round(ray.GetOrigin().z)
+	);
+	ivec3 b(
+		round(ray.GetOrigin().x + ray.GetDirection().x * maxDistance),
+		round(ray.GetOrigin().y + ray.GetDirection().y * maxDistance),
+		round(ray.GetOrigin().z + ray.GetDirection().z * maxDistance)
+	);
 
+	ivec3 point = a;
+	ivec3 lastPoint = a;
+	float lastValue = 0.0f;
+	ivec3 delta = b - a;
+	ivec3 lmn = abs(delta);
 
-		// Normals are weighed based on the angle of the edges that connect that corner
-		vec3 crossed = glm::cross(b - a, c - a);
-		vec3 normal = glm::normalize(crossed);
-		float area = crossed.length() * 0.5f;
+	ivec3 inc(
+		(delta.x < 0) ? -1 : 1,
+		(delta.y < 0) ? -1 : 1,
+		(delta.z < 0) ? -1 : 1
+	);
+	ivec3 delta2(
+		lmn.x << 1,
+		lmn.y << 1,
+		lmn.z << 1
+	);
 
-		normalLookup[ai] += crossed * glm::angle(b - a, c - a);
-		normalLookup[bi] += crossed * glm::angle(a - b, c - b);
-		normalLookup[ci] += crossed * glm::angle(a - c, b - c);
+	int err_1;
+	int err_2;
+	
+#define CHECK_OUTPUT \
+	if(point.x >= 0 && point.x < GetResolution().x && point.y >= 0 && point.y < GetResolution().y && point.z >= 0 && point.z < GetResolution().z) \
+	{ \
+		float value = Get(point.x, point.y, point.z); \
+		if (value >= GetIsoLevel()) \
+		{ \
+			hit.coord = point; \
+			hit.surface = lastPoint; \
+			hit.value = value; \
+			hit.surfaceValue = lastValue; \
+			return true; \
+		} \
+		lastPoint = point; \
+		lastValue = value; \
 	}
 
-	// Put normals into vector
-	normals.reserve(vertices.size());
-	for (uint32 i = 0; i < vertices.size(); ++i)
-		normals.emplace_back(normalLookup[i]);
 
+	if ((lmn.x >= lmn.y) && (lmn.x >= lmn.z))
+	{
+		err_1 = delta2.y - 1;
+		err_2 = delta2.z - 1;
+		for (int i = 0; i < lmn.x; ++i)
+		{
+			CHECK_OUTPUT;
+			if (err_1 > 0)
+			{
+				point.y += inc.y;
+				err_1 -= delta2.x;
+			}
+			if (err_2 > 0)
+			{
+				point.z += inc.z;
+				err_2 -= delta2.x;
+			}
+			err_1 += delta2.y;
+			err_2 += delta2.z;
+			point.x += inc.x;
+		}
+	}
+	else if ((lmn.y >= 1) && (lmn.y >= lmn.z))
+	{
+		err_1 = delta2.x - lmn.y;
+		err_2 = delta2.z - lmn.y;
+		for (int i = 0; i < lmn.y; ++i)
+		{
+			CHECK_OUTPUT;
+			if (err_1 > 0)
+			{
+				point.x += inc.x;
+				err_1 -= delta2.y;
+			}
+			if (err_2 > 0)
+			{
+				point.z += inc.z;
+				err_2 -= delta2.y;
+			}
+			err_1 += delta2.x;
+			err_2 += delta2.z;
+			point.y += inc.y;
+		}
+	}
+	else
+	{
+		err_1 = delta2.y - lmn.z;
+		err_2 = delta2.x - lmn.z;
+		for (int i = 0; i < lmn.z; ++i)
+		{
+			CHECK_OUTPUT;
+			if (err_1 > 0)
+			{
+				point.y += inc.y;
+				err_1 -= delta2.z;
+			}
+			if (err_2 > 0)
+			{
+				point.x += inc.x;
+				err_2 -= delta2.z;
+			}
+			err_1 += delta2.y;
+			err_2 += delta2.x;
+			point.z += inc.z;
+		}
+	}
 
-	m_mesh->SetVertices(vertices);
-	m_mesh->SetNormals(normals);
-	m_mesh->SetTriangles(triangles);
+	return false;
 }

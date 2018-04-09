@@ -2,9 +2,6 @@
 #include "Common.h"
 #include <vector>
 
-#ifndef DEFAULT_VALUE
-#define DEFAULT_VALUE 0.0f
-#endif
 
 
 /**
@@ -82,6 +79,17 @@ public:
 
 	virtual float GetValueAverage() const override { return m_valueAverage; }
 	virtual float GetValueDeviation() const override { return m_valueDeviation; }
+
+	/**
+	* Fetch the root coordinates for this child
+	* @param child			A node which is expected to be a child of this node
+	* @returns The coordinates (In relation to the root) for the child
+	*/
+	uvec3 FetchRootCoords(const OctreeVolumeNode* child) const;
+
+protected:
+	inline OctreeVolumeBranch* GetParentBranch() const { return (OctreeVolumeBranch*)GetParent(); }
+
 private:
 	/// Recalulate the average and deviation for this node
 	void RecalculateStats();
@@ -98,19 +106,39 @@ private:
 	///
 	/// General Vars
 	///
-	float m_value = DEFAULT_VALUE;
+	float m_value;
+	uvec3 m_coordinates;
 
 public:
 	OctreeVolumeLeaf(OctreeVolumeNode* parent);
 	virtual ~OctreeVolumeLeaf();
+
+	/** Called safely after this has been added to the tree */
+	void Init();
 
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override { m_value = value; }
 	virtual float Get(uint32 x, uint32 y, uint32 z) const override { return m_value; }
 
 	virtual float GetValueAverage() const override { return m_value; }
 	virtual float GetValueDeviation() const override { return 0.0f; }
+protected:
+	inline OctreeVolumeBranch* GetParentBranch() const { return (OctreeVolumeBranch*)GetParent(); }
 };
 
+
+/**
+* Represents a layer of a specific level-of-detail
+*/
+struct OctreeDetailLevel
+{
+	struct NodeMesh
+	{
+		OctreeVolumeNode* node;
+		class Mesh* mesh;		
+	};
+
+	std::vector<NodeMesh*> nodes;
+};
 
 
 /**
@@ -123,6 +151,7 @@ private:
 	/// General Vars
 	///
 	OctreeVolumeNode* m_root;
+	std::vector<OctreeDetailLevel> m_detailLevels;
 
 public:
 	VolumeOctree(uint16 resolution);

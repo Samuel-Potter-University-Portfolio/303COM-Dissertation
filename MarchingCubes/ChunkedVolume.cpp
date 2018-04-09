@@ -200,9 +200,9 @@ ChunkedVolume::~ChunkedVolume()
 ///
 /// Volume Data Overrides
 ///
-void ChunkedVolume::Init(const uvec3& resolution, const vec3& scale, float defaultValue)
+void ChunkedVolume::Init(const uvec3& resolution, const vec3& scale)
 {
-	m_data = new float[resolution.x * resolution.y * resolution.z]{ defaultValue };
+	m_data = new float[resolution.x * resolution.y * resolution.z]{ DEFAULT_VALUE };
 	m_resolution = resolution;
 	m_scale = scale;
 

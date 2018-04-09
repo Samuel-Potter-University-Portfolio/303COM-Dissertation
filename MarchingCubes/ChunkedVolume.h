@@ -3,7 +3,7 @@
 
 #include "Mesh.h"
 #include "Material.h"
-#include "VolumeData.h"
+#include "VoxelVolume.h"
 
 #include <vector>
 
@@ -43,7 +43,7 @@ public:
 /**
 * The chunked implementation for MC
 */
-class ChunkedVolume : public Object, public IVolumeData
+class ChunkedVolume : public Object, public IVoxelVolume
 {
 private:
 	///
@@ -79,7 +79,7 @@ public:
 	/// Voxel Data functions
 	///
 public:
-	virtual void Init(const uvec3& resolution, const vec3& scale, float defaultValue) override;
+	virtual void Init(const uvec3& resolution, const vec3& scale) override;
 
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override;
 	virtual float Get(uint32 x, uint32 y, uint32 z) override;

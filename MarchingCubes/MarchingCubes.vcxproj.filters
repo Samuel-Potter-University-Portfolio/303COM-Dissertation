@@ -43,6 +43,12 @@
     <Filter Include="PVM">
       <UniqueIdentifier>{7e733c25-2699-4471-a711-0b9c76f8f718}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Volume\Implementations">
+      <UniqueIdentifier>{75fde894-f182-470d-9c36-00f0e365e3ed}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Volume\Implementations">
+      <UniqueIdentifier>{c8d72cad-e564-4fc0-b8f2-7e738b0f4b57}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -99,26 +105,26 @@
     <ClCompile Include="DefaultMaterial.cpp">
       <Filter>Source Files\Engine\GL</Filter>
     </ClCompile>
-    <ClCompile Include="VolumeData.cpp">
-      <Filter>Source Files\Volume</Filter>
-    </ClCompile>
-    <ClCompile Include="VoxelVolume.cpp">
-      <Filter>Source Files\Volume</Filter>
-    </ClCompile>
     <ClCompile Include="PVM\ddsbase.cpp">
       <Filter>PVM</Filter>
     </ClCompile>
     <ClCompile Include="InteractionMaterial.cpp">
       <Filter>Source Files\Engine\GL</Filter>
     </ClCompile>
-    <ClCompile Include="ChunkedVolume.cpp">
-      <Filter>Source Files\Volume</Filter>
-    </ClCompile>
-    <ClCompile Include="TreeVolume.cpp">
-      <Filter>Source Files\Volume</Filter>
-    </ClCompile>
     <ClCompile Include="VolumeOctree.cpp">
       <Filter>Source Files\Volume</Filter>
+    </ClCompile>
+    <ClCompile Include="VoxelVolume.cpp">
+      <Filter>Source Files\Volume</Filter>
+    </ClCompile>
+    <ClCompile Include="ChunkedVolume.cpp">
+      <Filter>Source Files\Volume\Implementations</Filter>
+    </ClCompile>
+    <ClCompile Include="DefaultVolume.cpp">
+      <Filter>Source Files\Volume\Implementations</Filter>
+    </ClCompile>
+    <ClCompile Include="OctreeVolume.cpp">
+      <Filter>Source Files\Volume\Implementations</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -176,12 +182,6 @@
     <ClInclude Include="DefaultMaterial.h">
       <Filter>Header Files\Engine\GL</Filter>
     </ClInclude>
-    <ClInclude Include="VolumeData.h">
-      <Filter>Header Files\Volume</Filter>
-    </ClInclude>
-    <ClInclude Include="VoxelVolume.h">
-      <Filter>Header Files\Volume</Filter>
-    </ClInclude>
     <ClInclude Include="MarchingCubes.h">
       <Filter>Header Files\Volume</Filter>
     </ClInclude>
@@ -197,14 +197,20 @@
     <ClInclude Include="InteractionMaterial.h">
       <Filter>Header Files\Engine\GL</Filter>
     </ClInclude>
-    <ClInclude Include="ChunkedVolume.h">
-      <Filter>Header Files\Volume</Filter>
-    </ClInclude>
-    <ClInclude Include="TreeVolume.h">
-      <Filter>Header Files\Volume</Filter>
-    </ClInclude>
     <ClInclude Include="VolumeOctree.h">
       <Filter>Header Files\Volume</Filter>
+    </ClInclude>
+    <ClInclude Include="VoxelVolume.h">
+      <Filter>Header Files\Volume</Filter>
+    </ClInclude>
+    <ClInclude Include="ChunkedVolume.h">
+      <Filter>Header Files\Volume\Implementations</Filter>
+    </ClInclude>
+    <ClInclude Include="DefaultVolume.h">
+      <Filter>Header Files\Volume\Implementations</Filter>
+    </ClInclude>
+    <ClInclude Include="OctreeVolume.h">
+      <Filter>Header Files\Volume\Implementations</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

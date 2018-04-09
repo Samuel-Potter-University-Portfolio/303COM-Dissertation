@@ -6,9 +6,9 @@
 #include "SkyBox.h"
 #include "SpectatorController.h"
 
-#include "VoxelVolume.h"
+#include "DefaultVolume.h"
 #include "ChunkedVolume.h"
-#include "TreeVolume.h"
+#include "OctreeVolume.h"
 
 
 int main(int argc, char** argv)
@@ -20,7 +20,7 @@ int main(int argc, char** argv)
 
 	level->AddObject(new SpectatorController);
 	level->AddObject(new SkyBox);
-	level->AddObject(new TreeVolume);
+	level->AddObject(new OctreeVolume);
 	engine.SetLevel(level);
 	engine.LaunchMainLoop();
 	return 0;

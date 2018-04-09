@@ -1,19 +1,22 @@
-#include "TreeVolume.h"
+#include "OctreeVolume.h"
 #include "Logger.h"
 #include "glm.hpp"
 #include "DefaultMaterial.h"
+#include "InteractionMaterial.h"
 #include "VolumeOctree.h"
 
 
-TreeVolume::TreeVolume()
+OctreeVolume::OctreeVolume()
 {
 	m_isoLevel = 0.15f;
 }
 
-TreeVolume::~TreeVolume()
+OctreeVolume::~OctreeVolume()
 {
 	if (m_material != nullptr)
 		delete m_material;
+	if (m_wireMaterial != nullptr)
+		delete m_wireMaterial;
 	if (m_octree != nullptr)
 		delete m_octree;
 }
@@ -23,11 +26,10 @@ TreeVolume::~TreeVolume()
 /// Object functions
 ///
 
-#include "InteractionMaterial.h"
-void TreeVolume::Begin()
+void OctreeVolume::Begin()
 {
 	m_material = new DefaultMaterial;
-	//m_material = new InteractionMaterial;
+	m_wireMaterial = new InteractionMaterial;
 
 	m_mesh = new Mesh;
 	m_mesh->MarkDynamic();
@@ -35,23 +37,25 @@ void TreeVolume::Begin()
 	BuildMesh();
 }
 
-void TreeVolume::Update(const float & deltaTime)
+void OctreeVolume::Update(const float & deltaTime)
 {
 }
 
-void TreeVolume::Draw(const Window * window, const float & deltaTime)
+void OctreeVolume::Draw(const Window * window, const float & deltaTime)
 {
 	if (m_mesh != nullptr)
 	{
+		Transform t;
+
 		m_material->Bind(window, GetLevel());
 		m_material->PrepareMesh(m_mesh);
-
-		Transform t;
-		// TODO - Support raycasting into scaling
-		//t.SetScale(m_data.GetScale());
 		m_material->RenderInstance(&t);
-
 		m_material->Unbind(window, GetLevel());
+
+		//m_wireMaterial->Bind(window, GetLevel());
+		//m_wireMaterial->PrepareMesh(m_mesh);
+		//m_wireMaterial->RenderInstance(&t);
+		//m_wireMaterial->Unbind(window, GetLevel());
 	}
 }
 
@@ -60,14 +64,14 @@ void TreeVolume::Draw(const Window * window, const float & deltaTime)
 /// Object functions
 ///
 
-void TreeVolume::Init(const uvec3 & resolution, const vec3 & scale, float defaultValue)
+void OctreeVolume::Init(const uvec3 & resolution, const vec3 & scale)
 {
 	// Use even square resolution
 	const uint32 max = glm::max(resolution.x, glm::max(resolution.y, resolution.z));
 	const uint32 res = pow(2, ceil(log(max) / log(2)));
 
 
-	LOG("TreeVolume uses power of 2 uniform resolution");
+	LOG("OctreeVolume uses power of 2 uniform resolution");
 	LOG("(%i,%i,%i) converted to %ix", resolution.x, resolution.y, resolution.z, res);
 
 	m_resolution = uvec3(res, res, res);
@@ -75,12 +79,12 @@ void TreeVolume::Init(const uvec3 & resolution, const vec3 & scale, float defaul
 	m_octree = new VolumeOctree(res);
 }
 
-void TreeVolume::Set(uint32 x, uint32 y, uint32 z, float value)
+void OctreeVolume::Set(uint32 x, uint32 y, uint32 z, float value)
 {
 	m_octree->Set(x, y, z, value);
 }
 
-float TreeVolume::Get(uint32 x, uint32 y, uint32 z)
+float OctreeVolume::Get(uint32 x, uint32 y, uint32 z)
 {
 	return m_octree->Get(x, y, z);
 }
@@ -175,7 +179,7 @@ static void MeshFunc(std::vector<vec3>& vertices, std::vector<uint32>& triangles
 }
 
 
-void TreeVolume::BuildMesh()
+void OctreeVolume::BuildMesh()
 {
 	std::unordered_map<vec3, uint32, vec3_KeyFuncs> vertexIndexLookup;
 	vec3 edges[12];
