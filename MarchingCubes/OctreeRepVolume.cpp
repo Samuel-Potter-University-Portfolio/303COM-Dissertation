@@ -29,16 +29,36 @@ OctRepNode::OctRepNode(OctRepNode* parent, const uvec3& offset) :
 	m_depth(parent->m_depth + 1)
 {
 }
+OctRepNode::~OctRepNode() 
+{
+	for (auto child : m_children)
+		if(child != nullptr)
+			delete child;
+}
 
 void OctRepNode::Push(const uint32& x, const uint32& y, const uint32& z, const float& value, OctRepNotifyPacket& outPacket)
 {
 	// Update value at leaf
 	if (IsLeaf())
 	{
-		m_values[GetIndex(x, y, z)] = value;
-		RecalculateStats();
+		if (m_values[GetIndex(x, y, z)] != value)
+		{
+			m_values[GetIndex(x, y, z)] = value;
+			RecalculateStats();
+			outPacket.updatedNodes.emplace_back(this);
+		}
 		return;
 	}
+
+	// One of the corners, so save the value
+	if ((x == 0 || x == GetResolution() - 1) &&
+		(y == 0 || y == GetResolution() - 1) &&
+		(z == 0 || z == GetResolution() - 1)
+		) 
+	{
+		m_values[GetIndex(x == 0 ? 0 : 1, y == 0 ? 0 : 1, z == 0 ? 0 : 1)] = value;
+	}
+
 
 	const uint16 childRes = GetChildResolution();
 
@@ -78,13 +98,33 @@ void OctRepNode::Push(const uint32& x, const uint32& y, const uint32& z, const f
 				uint32 nz = cz == 0 ? z : z - (childRes - 1);
 
 				child->Push(nx, ny, nz, value, outPacket);
-				outPacket.updatedNodes.emplace_back(child);
 			}
 		}
 	}
-	
-	RecalculateStats();
-	// TODO - Check children are not default values
+
+	// Check children are not default values
+	for (auto& child : m_children)
+	{
+		if (child != nullptr && child->IsDefaultValues())
+		{
+			outPacket.deletedNodes.emplace_back(child);
+			delete child;
+			child = nullptr;
+		}
+	}
+
+
+	// Update stats
+	if (!IsDefaultValues())
+	{
+		float oldAverage = m_average;
+		float oldDeviation = m_stdDeviation;
+		RecalculateStats();
+
+		// Has this node been updated
+		if (oldAverage != m_average || oldDeviation != m_stdDeviation)
+			outPacket.updatedNodes.emplace_back(this);
+	}
 }
 
 void OctRepNode::RecalculateStats()
@@ -99,13 +139,31 @@ void OctRepNode::RecalculateStats()
 	float sum = 0.0f;
 	for (int i = 0; i < 8; ++i)
 		sum += std::pow(m_values[i] - m_average, 2);
-	m_average = std::sqrt(sum / 8.0f);
+	m_stdDeviation = std::sqrt(sum / 8.0f);
 }
 
 uint32 OctRepNode::GetChildResolution() const 
 {
 	// Where res(i) = 1 + 2^(i+1)
 	return m_resolution > 3 ? (m_resolution - 1) / 2 + 1 : 2;
+}
+
+bool OctRepNode::IsDefaultValues() const
+{
+	if (IsLeaf())
+	{
+		for (const float& value : m_values)
+			if (value != DEFAULT_VALUE)
+				return false;
+		return true;
+	}
+	else
+	{
+		for (const auto& child : m_children)
+			if (child != nullptr)
+				return false;
+		return true;
+	}
 }
 
 void OctRepNode::GeneratePartialMesh(const float& isoLevel, VoxelPartialMeshData* target)
@@ -127,7 +185,7 @@ void OctRepNode::GeneratePartialMesh(const float& isoLevel, VoxelPartialMeshData
 
 	// Cache vars
 	const vec3 worldCoord = m_offset;
-	const float resf = (float)(GetResolution() - 1);
+	const float resf = (float)GetResolution() - 1.0f;
 
 
 	// Smooth edges based on density
@@ -284,15 +342,29 @@ void OctreeRepVolume::Set(uint32 x, uint32 y, uint32 z, float value)
 	OctRepNotifyPacket changes;
 	m_octree->Push(x, y, z, value, changes);
 
+
+	// Remove deleted nodes
+	for (OctRepNode* node : changes.deletedNodes)
+	{
+		auto it = m_nodeLevel.find(node);
+		if (it != m_nodeLevel.end())
+			m_nodeLevel.erase(it);
+	}
+
 	// Add leaf nodes to list
 	for (OctRepNode* node : changes.newNodes)
-		if (node->IsLeaf())
+		if (node->GetResolution() == 17)
 			(m_nodeLevel[node] = VoxelPartialMeshData()).isStale = true;
+
 
 	// Update leaf nodes to list
 	for (OctRepNode* node : changes.updatedNodes)
-		if (node->IsLeaf())
-			m_nodeLevel[node].isStale = true;
+	{
+		auto it = m_nodeLevel.find(node);
+		if (it != m_nodeLevel.end())
+			it->second.isStale = true;
+	}
+
 
 	TEST_REBUILD = true;
 }

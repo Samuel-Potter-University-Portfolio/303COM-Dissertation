@@ -49,6 +49,7 @@ private:
 public:
 	OctRepNode(uint16 resolution);
 	OctRepNode(OctRepNode* parent, const uvec3& offset);
+	~OctRepNode();
 
 	/**
 	* Push a (new or changed) value into this tree
@@ -74,6 +75,8 @@ public:
 	/// Getters & Setters
 	///
 public:
+	bool IsDefaultValues() const;
+
 	inline float GetAverage() const { return m_average; }
 	inline float GetStdDeviation() const { return m_stdDeviation; }
 
