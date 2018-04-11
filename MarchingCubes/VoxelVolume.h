@@ -1,6 +1,7 @@
 #pragma once
 #include "Common.h"
 #include "Ray.h"
+#include <vector>
 
 
 /// The value that every voxel will be set to by defaul
@@ -11,8 +12,38 @@
 
 /// The value that should be assumed if trying to access invalid voxel, while building
 #ifndef UNKNOWN_BUILD_VALUE
-#define UNKNOWN_BUILD_VALUE 1.0f
+#define UNKNOWN_BUILD_VALUE 0.0f
 #endif
+
+
+/**
+* Partial data about a voxel sub-sections
+*/
+struct VoxelPartialMeshData
+{
+	/**
+	* Information about a single triangle
+	*/
+	struct TriData
+	{
+		vec3 a;
+		vec3 b;
+		vec3 c;
+		vec3 weightedNormal; // weighted, so normals can be calculated more fairly later on
+
+		TriData(const vec3& a, const vec3& b, const vec3& c, const vec3& weightedNormal)
+			: a(a), b(b), c(c), weightedNormal(weightedNormal)
+		{}
+	};
+
+public:
+	std::vector<TriData> triangles;
+	bool isStale;
+
+	inline void AddTriangle(const vec3& a, const vec3& b, const vec3& c, const vec3& weightedNormal) { triangles.emplace_back(a, b, c, weightedNormal); }
+	inline void Clear() { triangles.clear(); isStale = false; }
+};
+
 
 
 /**

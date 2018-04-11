@@ -10,7 +10,7 @@ InteractionMaterial::InteractionMaterial()
 	m_shader->LoadFragmentShaderFromFile("Resources/Shaders/interaction.frag.glsl");
 	m_shader->LinkShader();
 
-	m_shader->SetCullFace(false);
+	m_shader->SetCullFace(true);
 
 
 	m_uniformColour = m_shader->GetUniform("colour");

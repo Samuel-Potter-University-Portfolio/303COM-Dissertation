@@ -87,6 +87,9 @@ public:
 	inline float GetAspectRatio() const { return m_aspectRatio; }
 
 	inline Keyboard* GetKeyboard() { return m_keyboard; }
+	inline const Keyboard* GetKeyboard() const { return m_keyboard; }
+
 	inline Mouse* GetMouse() { return m_mouse; }
+	inline const Mouse* GetMouse() const { return m_mouse; }
 };
 

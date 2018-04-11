@@ -9,6 +9,7 @@
 #include "DefaultVolume.h"
 #include "ChunkedVolume.h"
 #include "OctreeVolume.h"
+#include "OctreeRepVolume.h"
 
 
 int main(int argc, char** argv)
@@ -20,7 +21,7 @@ int main(int argc, char** argv)
 
 	level->AddObject(new SpectatorController);
 	level->AddObject(new SkyBox);
-	level->AddObject(new OctreeVolume);
+	level->AddObject(new OctreeRepVolume);
 	engine.SetLevel(level);
 	engine.LaunchMainLoop();
 	return 0;

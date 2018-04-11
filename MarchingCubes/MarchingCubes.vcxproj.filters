@@ -111,9 +111,6 @@
     <ClCompile Include="InteractionMaterial.cpp">
       <Filter>Source Files\Engine\GL</Filter>
     </ClCompile>
-    <ClCompile Include="VolumeOctree.cpp">
-      <Filter>Source Files\Volume</Filter>
-    </ClCompile>
     <ClCompile Include="VoxelVolume.cpp">
       <Filter>Source Files\Volume</Filter>
     </ClCompile>
@@ -128,6 +125,9 @@
     </ClCompile>
     <ClCompile Include="MeshBuilder.cpp">
       <Filter>Source Files\Engine\GL</Filter>
+    </ClCompile>
+    <ClCompile Include="OctreeRepVolume.cpp">
+      <Filter>Source Files\Volume\Implementations</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -200,9 +200,6 @@
     <ClInclude Include="InteractionMaterial.h">
       <Filter>Header Files\Engine\GL</Filter>
     </ClInclude>
-    <ClInclude Include="VolumeOctree.h">
-      <Filter>Header Files\Volume</Filter>
-    </ClInclude>
     <ClInclude Include="VoxelVolume.h">
       <Filter>Header Files\Volume</Filter>
     </ClInclude>
@@ -217,6 +214,9 @@
     </ClInclude>
     <ClInclude Include="MeshBuilder.h">
       <Filter>Header Files\Engine\GL</Filter>
+    </ClInclude>
+    <ClInclude Include="OctreeRepVolume.h">
+      <Filter>Header Files\Volume\Implementations</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

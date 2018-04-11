@@ -16,7 +16,7 @@ namespace MC
 	* @param aVal					The value at the first voxel
 	* @param bVal					The value at the second voxel
 	*/
-	static vec3 VertexLerp(float isoLevel, const vec3& a, const vec3& b, float aVal, float bVal)
+	static inline vec3 VertexLerp(float isoLevel, const vec3& a, const vec3& b, float aVal, float bVal)
 	{
 		const float closeValue = 0.00001f;
 
@@ -30,7 +30,6 @@ namespace MC
 		float mu = (isoLevel - aVal) / (bVal - aVal);
 		return a + mu * (b - a);
 	}
-
 
 	/// Self written edge lookup table
 	static vec3 Edges[12]

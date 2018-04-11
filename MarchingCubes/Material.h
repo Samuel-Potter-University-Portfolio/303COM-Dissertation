@@ -64,7 +64,8 @@ protected:
 	uint32 m_uniformWorldToView;
 	uint32 m_uniformViewToClip;
 
-	uint32 m_boundMeshTris;
+	bool m_boundMeshDrawTris;
+	uint32 m_boundMeshDrawCount;
 
 public:
 	/**

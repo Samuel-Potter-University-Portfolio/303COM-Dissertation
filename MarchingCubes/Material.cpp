@@ -44,14 +44,15 @@ void WorldMaterialBase::Unbind(const Window* window, const Level* level)
 
 void WorldMaterialBase::PrepareMesh(const Mesh* mesh) 
 {
-	glBindVertexArray(mesh->GetID());
-	m_boundMeshTris = mesh->GetTriangleCount();
+	glBindVertexArray(mesh->GetID()); 
+	
+	m_boundMeshDrawTris = mesh->ContainsTriangles();
+	m_boundMeshDrawCount = mesh->GetDrawCount();
 }
 
 void WorldMaterialBase::RenderInstance(Transform* transform)
 {
 	m_shader->SetUniformMat4(m_uniformObjectToWorld, transform == nullptr ? mat4(1.0f) : transform->GetTransformMatrix());
 
-	glDrawElements(GL_TRIANGLES, m_boundMeshTris, GL_UNSIGNED_INT, nullptr);
-
+	glDrawElements(m_boundMeshDrawTris ? GL_TRIANGLES : GL_QUADS, m_boundMeshDrawCount, GL_UNSIGNED_INT, nullptr);
 }

@@ -37,5 +37,6 @@ void main()
 
 	vec3 colour = vec3(1,1,1);
 	outColour.rgb = colour * (diffuse0);
+	//outColour.rgb = mod(normal, 1.0f);
 	outColour.a = 1.0;
 }

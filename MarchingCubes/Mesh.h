@@ -20,7 +20,7 @@ private:
 	/// IDs
 	///
 	uint32 m_id = 0;
-	uint32 m_triangleCount = 0;
+	uint32 m_drawCount = 0;
 
 	uint32 m_triId = 0;
 	uint32 m_bufferId[16]{ 0 };
@@ -29,6 +29,7 @@ private:
 	/// Mesh Settings
 	///
 	bool bIsDynamic = false;
+	bool bUsesQuads = false;
 
 public:
 	Mesh();
@@ -39,6 +40,12 @@ public:
 	* @param trangles		List of the indices for drawing a triangle
 	*/
 	void SetTriangles(const std::vector<uint32>& triangles);
+
+	/**
+	* Set all of the quad indices for this mesh
+	* @param trangles		List of the indices for drawing a quad
+	*/
+	void SetQuads(const std::vector<uint32>& quads);
 
 	/**
 	* Store vertices into the correct buffer
@@ -83,7 +90,10 @@ private:
 	///
 public:
 	inline uint32 GetID() const { return m_id; }
-	inline uint32 GetTriangleCount() const { return m_triangleCount; }
+	inline uint32 GetDrawCount() const { return m_drawCount; }
+
+	inline bool ContainsTriangles() const { return !bUsesQuads; }
+	inline bool ContainsQuads() const { return bUsesQuads; }
 
 	/// Stores data into a faster to write place
 	inline void MarkDynamic() { bIsDynamic = true; }

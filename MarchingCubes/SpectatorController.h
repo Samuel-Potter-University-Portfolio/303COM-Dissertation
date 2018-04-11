@@ -4,6 +4,16 @@
 #include "VoxelVolume.h"
 
 
+enum class InteractionShape 
+{
+	Point = 0,
+	Sphere,
+	Cube,
+	Unknown
+};
+
+
+
 class SpectatorController : public Object
 {
 private:
@@ -11,6 +21,8 @@ private:
 	/// General Vars
 	///
 	Camera* camera;
+	uint32 m_shapeSize = 10;
+	InteractionShape m_interactionShape;
 	
 	///
 	/// Lookat Vars

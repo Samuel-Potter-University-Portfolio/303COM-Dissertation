@@ -64,3 +64,16 @@ struct uvec3_KeyFuncs
 		return a.x == b.x && a.y == b.y && a.z == b.z;
 	}
 };
+
+struct ivec3_KeyFuncs
+{
+	inline size_t operator()(const ivec3& v)const
+	{
+		return std::hash<int>()(v.x) ^ std::hash<int>()(v.y) ^ std::hash<int>()(v.z);
+	}
+
+	inline bool operator()(const ivec3& a, const ivec3& b)const
+	{
+		return a.x == b.x && a.y == b.y && a.z == b.z;
+	}
+};

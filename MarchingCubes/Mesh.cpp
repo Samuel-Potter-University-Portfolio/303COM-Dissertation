@@ -25,8 +25,25 @@ void Mesh::SetTriangles(const std::vector<uint32>& triangles)
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_triId);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, triangles.size() * sizeof(uint32), triangles.data(), bIsDynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 
-	m_triangleCount = triangles.size();
+	m_drawCount = triangles.size();
+	bUsesQuads = false;
 
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+}
+
+void Mesh::SetQuads(const std::vector<uint32>& quads)
+{
+	glBindVertexArray(m_id);
+
+	if (m_triId == 0)
+		glGenBuffers(1, &m_triId);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_triId);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, quads.size() * sizeof(uint32), quads.data(), bIsDynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+
+	m_drawCount = quads.size();
+	bUsesQuads = true;
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
