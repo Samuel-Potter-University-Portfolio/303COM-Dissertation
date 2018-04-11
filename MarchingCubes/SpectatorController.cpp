@@ -9,6 +9,21 @@
 
 void SpectatorController::Begin() 
 {
+	LOG("Controls:");
+	LOG("\tWS: \t\tForward/Back");
+	LOG("\tAD: \t\tLeft/Right");
+	LOG("\tSpace: \t\tUp");
+	LOG("\tLCtrl: \t\tDown");
+	LOG("\tMouse: \t\tLook");
+	LOG("\tMMB: \t\tToggle grab mouse");
+	LOG("\tLMB: \t\tPlace volume");
+	LOG("\tRMB: \t\tDestroy volume");
+
+	LOG("\tQ: \t\tShape size");
+	LOG("\tE: \t\tShape type");
+	LOG("\tR: \t\tToggle draw volume");
+	LOG("\tT: \t\tToggle draw wireframe");
+
 	camera = GetLevel()->GetCamera();
 
 	m_mesh = new Mesh;
@@ -164,59 +179,141 @@ void SpectatorController::Update(const float& deltaTime)
 				bLookingAtVoxel = volume->Raycast(Ray(m_transform.GetLocation(), m_transform.GetForward()), lookatVoxel, 1000.0f);
 		}
 
-		const float interactionRate = 5.0f * deltaTime;
 
+		// Change shape size
+		if (keyboard->IsKeyPressed(Keyboard::Key::KV_Q))
+		{
+			m_shapeSize++;
+			if (m_shapeSize > 20)
+				m_shapeSize = 5;
+			LOG("Shape size %i", m_shapeSize);
+		}
+
+		// Shuffle shapes
+		if (keyboard->IsKeyPressed(Keyboard::Key::KV_E))
+		{
+			switch (m_interactionShape)
+				{
+				case InteractionShape::Point:
+					m_interactionShape = InteractionShape::Sphere;
+					break;
+				case InteractionShape::Sphere:
+					m_interactionShape = InteractionShape::Cube;
+					break;
+				case InteractionShape::Cube:
+					m_interactionShape = InteractionShape::Point;
+					break;
+			}
+
+			LOG("Interaction shape %s",
+				m_interactionShape == InteractionShape::Cube ? "CUBE" :
+				m_interactionShape == InteractionShape::Point ? "POINT" :
+				m_interactionShape == InteractionShape::Sphere ? "SPHERE" : "UNKNOWN"
+			);
+		}
+		
 		// Voxel interaction
 		if (bLookingAtVoxel)
 		{
-			// Destroy voxel
-			//if (mouse->IsButtonDown(Mouse::Button::MB_LEFT))
-			//	volume->Set(lookatVoxel.coord.x, lookatVoxel.coord.y, lookatVoxel.coord.z, glm::clamp(lookatVoxel.value - interactionRate, 0.0f, 1.0f));
-
-			// Place voxel
-			//if (mouse->IsButtonDown(Mouse::Button::MB_RIGHT))
-			//{
-			//	if (lookatVoxel.value < 1.0f)
-			//		volume->Set(lookatVoxel.coord.x, lookatVoxel.coord.y, lookatVoxel.coord.z, glm::clamp(lookatVoxel.value + interactionRate, 0.0f, 1.0f));
-			//	else
-			//		volume->Set(lookatVoxel.surface.x, lookatVoxel.surface.y, lookatVoxel.surface.z, glm::clamp(lookatVoxel.surfaceValue + interactionRate, 0.0f, 1.0f));
-			//}
-
 			// Destroy/Destroy voxel
 			const bool destroy = mouse->IsButtonPressed(Mouse::Button::MB_LEFT);
 			const bool place = mouse->IsButtonPressed(Mouse::Button::MB_RIGHT);
 			if (destroy || place)
 			{
 				const uvec3 res = volume->GetResolution();
-				const int32 radius = 5;
 
-				for (int32 x = -radius; x <= radius; ++x)
-					for (int32 y = -radius; y <= radius; ++y)
-						for (int32 z = -radius; z <= radius; ++z)
+				switch (m_interactionShape)
+				{
+					case InteractionShape::Point:
+					{
+						ivec3 pos(
+							lookatVoxel.coord.x,
+							lookatVoxel.coord.y,
+							lookatVoxel.coord.z
+						);
+
+						if (pos.x >= 0 && pos.x < res.x && pos.y >= 0 && pos.y < res.y && pos.z >= 0 && pos.z < res.z)
 						{
-							const float length = glm::length(vec3(x, y, z)) / radius;
-							
-							ivec3 pos(
-								lookatVoxel.coord.x + x,
-								lookatVoxel.coord.y + y,
-								lookatVoxel.coord.z + z
-							);
-
-							if (pos.x >= 0 && pos.x < res.x && pos.y >= 0 && pos.y < res.y && pos.z >= 0 && pos.z < res.z)
+							if (destroy)
 							{
-								if (destroy)
-								{
-									float value = volume->Get(pos.x, pos.y, pos.z);
-									volume->Set(pos.x, pos.y, pos.z, glm::min(1.0f, glm::min(length * volume->GetIsoLevel(), value)));
-								}
-								if (place)
-								{
-									float value = volume->Get(pos.x, pos.y, pos.z);
-									volume->Set(pos.x, pos.y, pos.z, glm::max(0.0f, glm::max(1.0f - length, value)));
-								}
-
+								float value = volume->Get(pos.x, pos.y, pos.z);
+								volume->Set(pos.x, pos.y, pos.z, 0.0f);
+							}
+							if (place)
+							{
+								float value = volume->Get(pos.x, pos.y, pos.z);
+								volume->Set(lookatVoxel.surface.x, lookatVoxel.surface.y, lookatVoxel.surface.z, 1.0f);
 							}
 						}
+						break;
+					}
+
+					case InteractionShape::Sphere:
+					{
+						const int32 radius = m_shapeSize / 2;
+
+						for (int32 x = -radius; x <= radius; ++x)
+							for (int32 y = -radius; y <= radius; ++y)
+								for (int32 z = -radius; z <= radius; ++z)
+								{
+									const float length = glm::length(vec3(x, y, z)) / radius;
+
+									ivec3 pos(
+										lookatVoxel.coord.x + x,
+										lookatVoxel.coord.y + y,
+										lookatVoxel.coord.z + z
+									);
+
+									if (pos.x >= 0 && pos.x < res.x && pos.y >= 0 && pos.y < res.y && pos.z >= 0 && pos.z < res.z)
+									{
+										if (destroy)
+										{
+											float value = volume->Get(pos.x, pos.y, pos.z);
+											volume->Set(pos.x, pos.y, pos.z, glm::min(1.0f, glm::min(length * volume->GetIsoLevel(), value)));
+										}
+										if (place)
+										{
+											float value = volume->Get(pos.x, pos.y, pos.z);
+											volume->Set(pos.x, pos.y, pos.z, glm::max(0.0f, glm::max(1.0f - length, value)));
+										}
+									}
+								}
+						break;
+					}
+
+					case InteractionShape::Cube:
+					{
+						const int32 halfSize = m_shapeSize / 2;
+
+						for (int32 x = -halfSize; x <= halfSize; ++x)
+							for (int32 y = -halfSize; y <= halfSize; ++y)
+								for (int32 z = -halfSize; z <= halfSize; ++z)
+								{
+									ivec3 pos(
+										lookatVoxel.coord.x + x,
+										lookatVoxel.coord.y + y,
+										lookatVoxel.coord.z + z
+									);
+
+									if (pos.x >= 0 && pos.x < res.x && pos.y >= 0 && pos.y < res.y && pos.z >= 0 && pos.z < res.z)
+									{
+										if (destroy)
+										{
+											float value = volume->Get(pos.x, pos.y, pos.z);
+											volume->Set(pos.x, pos.y, pos.z, 0.0f);
+										}
+										if (place)
+										{
+											float value = volume->Get(pos.x, pos.y, pos.z);
+											volume->Set(pos.x, pos.y, pos.z, 1.0f);
+										}
+									}
+								}
+						break;
+					}
+				}
+
+
 			}
 		}
 	}
@@ -224,7 +321,7 @@ void SpectatorController::Update(const float& deltaTime)
 
 void SpectatorController::Draw(const Window* window, const float& deltaTime) 
 {
-	if (bLookingAtVoxel || true)
+	if (bLookingAtVoxel)
 	{
 		m_material->Bind(window, GetLevel());
 		m_material->PrepareMesh(m_mesh);
