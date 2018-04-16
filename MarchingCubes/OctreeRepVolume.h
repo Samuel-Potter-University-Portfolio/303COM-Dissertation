@@ -5,8 +5,10 @@
 #include "Material.h"
 #include "Mesh.h"
 
+#include <map>
 #include <unordered_map>
 #include <array>
+#include <functional>
 
 
 class OctRepNode;
@@ -64,18 +66,22 @@ public:
 	*/
 	void RecalculateStats();
 
+
+	typedef std::function<vec3(const float& isoLevel, const uvec3& a, const uvec3& b, const uint32& minRes)> RetrieveEdgeCallback;
 	/**
 	* Generate the partial mesh for this node
 	* @param isoLevel			The isoLevel to use in MC
+	* @param edgeCallback		Retreive an appropriately placed edge
 	* @param target				Where to store the newly generated mesh data
 	*/
-	void GeneratePartialMesh(const float& isoLevel, VoxelPartialMeshData* target);
+	void GeneratePartialMesh(const float& isoLevel, RetrieveEdgeCallback edgeCallback, VoxelPartialMeshData* target);
 
 	///
 	/// Getters & Setters
 	///
 public:
 	bool IsDefaultValues() const;
+	bool RequiresHigherDetail() const;
 
 	inline float GetAverage() const { return m_average; }
 	inline float GetStdDeviation() const { return m_stdDeviation; }
@@ -84,6 +90,7 @@ public:
 	inline bool IsLeaf() const { return m_resolution <= 2; }
 	inline bool IsBranch() const { return m_resolution > 2; }
 
+	inline const uvec3& GetOffset() const { return m_offset; }
 	inline uint32 GetResolution() const { return m_resolution; }
 	inline uint32 GetDepth() const { return m_depth; }
 	uint32 GetChildResolution() const;
@@ -95,8 +102,80 @@ private:
 
 
 /**
+* Represents a single layer of an octree
+*/
+class OctreeRepLayer 
+{
+	///
+	/// General Vars
+	///
+private:
+	uint32 m_resolution; // The resolution this layer represents
+	std::unordered_map<uvec3, OctRepNode*, uvec3_KeyFuncs> m_nodes; // All nodes which are in this layer
+	const class OctreeRepVolume* m_volume;
+
+public:
+	OctreeRepLayer* nextLayer = nullptr;
+
+public:
+	OctreeRepLayer(const OctreeRepVolume* volume, const uint32& resolution) : m_volume(volume), m_resolution(resolution) {}
+
+	/**
+	* Calculate the edge from 2 given points
+	* @param isoLevel		The isoLevel to place the edge at
+	* @param a				Coord of first point
+	* @param b				Coord of second point
+	* @param minRes			The minimum resolution to consider before using default value
+	*/
+	vec3 RetrieveEdge(const float& isoLevel, const uvec3& a, const uvec3& b, const uint32& minRes);
+
+	/**
+	* Fetch the drawn isovalue for a given world coordinate
+	* @param x,y,z			World coordinates
+	*/
+	float FetchIsoValue(const uint32& x, const uint32& y, const uint32& z) const;
+	
+	/**
+	* Attempt to find a node if it exists
+	* @param x,y,z			World coordinates
+	* @param outNode		Where to store the retrieved node
+	* @returns If the node was found
+	*/
+	bool AttemptGet(const uint32& x, const uint32& y, const uint32& z, OctRepNode*& outNode) const;
+
+
+	/// Callback for when a new node is created
+	void OnNewNode(OctRepNode* node);
+
+	/// Callback for when a node is modified
+	void OnModifyNode(OctRepNode* node);
+	
+	/// Callback for when a node deleted
+	void OnDeleteNode(const OctRepNode* node);
+
+private:
+	/**
+	* Perform smooth MC vertex lerp for this layer
+	* @param isoLevel		The isoLevel to place the edge at
+	* @param a				Coord of first point
+	* @param b				Coord of second point
+	* @returns Where this edge is expected to be
+	*/
+	vec3 VertexLerp(const float& isoLevel, const uvec3& a, const uvec3& b) const;
+
+	vec3 ProjectCorners(const float& isoLevel, const uvec3& a, const uvec3& b, const uvec3& bottomLeft, const uvec3& bottomRight, const uvec3& topLeft, const uvec3& topRight) const;
+
+public:
+	inline uint32 GetResolution() const { return m_resolution; }
+};
+
+
+
+/**
 * Represents an octree based volume, but where the data is still centralised
 * The octree is used to more easily propagate rebuild/lod commands
+*
+* Stores nodes in layers, for easy querying
 */
 class OctreeRepVolume : public Object, public IVoxelVolume
 {
@@ -113,6 +192,7 @@ private:
 	///
 	std::vector<float> m_data;
 	OctRepNode* m_octree;
+	std::vector<OctreeRepLayer> m_layers;
 
 	float m_isoLevel;
 	vec3 m_scale = vec3(1, 1, 1);
@@ -145,7 +225,8 @@ public:
 	virtual void Init(const uvec3& resolution, const vec3& scale) override;
 
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override;
-	virtual float Get(uint32 x, uint32 y, uint32 z) override;
+	virtual float Get(uint32 x, uint32 y, uint32 z) override; // TODO - FIX THAT GET
+	float Get(uint32 x, uint32 y, uint32 z) const;
 
 	virtual uvec3 GetResolution() const override { return m_resolution; }
 	virtual bool SupportsDynamicResolution() const override { return false; }
@@ -155,6 +236,14 @@ public:
 
 	// TODO - MAKE PROPER
 	void BuildMesh();
+public:
+	/**
+	* Fetch the isovalue for this given coordinate
+	* @param x,y,z			The local coordnate to lookup
+	* @returns The appropriate isovalue use for drawing
+	*/
+	float GetIsoValue(const uint32& x, const uint32& y, const uint32& z) const;
+
 
 	///
 	/// Getters & Setters
