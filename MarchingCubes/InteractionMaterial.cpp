@@ -2,7 +2,7 @@
 #include "GL/glew.h"
 
 
-InteractionMaterial::InteractionMaterial()
+InteractionMaterial::InteractionMaterial(const vec4& colour)
 {
 	m_shader = new Shader;
 
@@ -14,6 +14,7 @@ InteractionMaterial::InteractionMaterial()
 
 
 	m_uniformColour = m_shader->GetUniform("colour");
+	m_colour = colour;
 }
 
 void InteractionMaterial::Bind(const Window* window, const Level* level)
@@ -21,7 +22,7 @@ void InteractionMaterial::Bind(const Window* window, const Level* level)
 	Super::Bind(window, level);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-	m_shader->SetUniformVec4(m_uniformColour, vec4(0.0f, 1.0f, 0.0f, 1.0f));
+	m_shader->SetUniformVec4(m_uniformColour, m_colour);
 }
 
 void InteractionMaterial::Unbind(const Window* window, const Level* level)

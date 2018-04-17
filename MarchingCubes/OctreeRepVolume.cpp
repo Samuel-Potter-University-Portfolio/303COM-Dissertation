@@ -57,6 +57,7 @@ void OctRepNode::Push(const uint32& x, const uint32& y, const uint32& z, const f
 		) 
 	{
 		m_values[GetIndex(x == 0 ? 0 : 1, y == 0 ? 0 : 1, z == 0 ? 0 : 1)] = value;
+		outPacket.updatedNodes.emplace_back(this);
 	}
 
 
@@ -166,18 +167,18 @@ bool OctRepNode::IsDefaultValues() const
 	}
 }
 
-void OctRepNode::GeneratePartialMesh(const float& isoLevel, RetrieveEdgeCallback edgeCallback, VoxelPartialMeshData* target)
+void OctRepNode::GeneratePartialMesh(const float& isoLevel, RetrieveEdgeCallback edgeCallback, VoxelPartialMeshData* target, const uint32& minRes)
 {
-	if (!IsLeaf() && RequiresHigherDetail())
+	// Build child meshes instead
+	if (!IsLeaf() && RequiresHigherDetail(isoLevel, minRes))
 	{
 		for (OctRepNode* child : m_children)
 			if (child != nullptr)
-				child->GeneratePartialMesh(isoLevel, edgeCallback, target);
+				child->GeneratePartialMesh(isoLevel, edgeCallback, target, minRes);
 		return;
 	}
 
 	// Cache values
-	const uint32 width = m_resolution - 1;
 	float v000 = m_values[GetIndex(0, 0, 0)];
 	float v001 = m_values[GetIndex(0, 0, 1)];
 	float v010 = m_values[GetIndex(0, 1, 0)];
@@ -211,6 +212,7 @@ void OctRepNode::GeneratePartialMesh(const float& isoLevel, RetrieveEdgeCallback
 	// Fully inside iso-surface
 	if (caseIndex == 0 || caseIndex == 255)
 		return;
+
 
 
 	// Cache vars
@@ -261,9 +263,141 @@ void OctRepNode::GeneratePartialMesh(const float& isoLevel, RetrieveEdgeCallback
 	}
 }
 
-bool OctRepNode::RequiresHigherDetail() const 
+void OctRepNode::GenerateDebugPartialMesh(const float& isoLevel, VoxelPartialMeshData* target, const uint32& minRes)
 {
-	return GetStdDeviation() > 0.115f;
+	// Build child meshes instead
+	if (!IsLeaf() && RequiresHigherDetail(isoLevel, minRes))
+	{
+		for (OctRepNode* child : m_children)
+			if (child != nullptr)
+				child->GenerateDebugPartialMesh(isoLevel, target, minRes);
+		return;
+	}
+
+	// Cache values
+	float v000 = m_values[GetIndex(0, 0, 0)];
+	float v001 = m_values[GetIndex(0, 0, 1)];
+	float v010 = m_values[GetIndex(0, 1, 0)];
+	float v011 = m_values[GetIndex(0, 1, 1)];
+	float v100 = m_values[GetIndex(1, 0, 0)];
+	float v101 = m_values[GetIndex(1, 0, 1)];
+	float v110 = m_values[GetIndex(1, 1, 0)];
+	float v111 = m_values[GetIndex(1, 1, 1)];
+
+	// Calculate the current case
+	uint8 caseIndex = 0;
+	if (v000 >= isoLevel) caseIndex |= 1;
+	if (v100 >= isoLevel) caseIndex |= 2;
+	if (v101 >= isoLevel) caseIndex |= 4;
+	if (v001 >= isoLevel) caseIndex |= 8;
+	if (v010 >= isoLevel) caseIndex |= 16;
+	if (v110 >= isoLevel) caseIndex |= 32;
+	if (v111 >= isoLevel) caseIndex |= 64;
+	if (v011 >= isoLevel) caseIndex |= 128;
+
+	// Fully inside iso-surface
+	if (caseIndex == 0 || caseIndex == 255)
+		return;
+
+
+	const vec3 pos = m_offset;
+	const float res = GetResolution() - 1;
+
+	vec3 p000 = pos + vec3(0, 0, 0) * res;
+	vec3 p001 = pos + vec3(0, 0, 1) * res;
+	vec3 p010 = pos + vec3(0, 1, 0) * res;
+	vec3 p011 = pos + vec3(0, 1, 1) * res;
+	vec3 p100 = pos + vec3(1, 0, 0) * res;
+	vec3 p101 = pos + vec3(1, 0, 1) * res;
+	vec3 p110 = pos + vec3(1, 1, 0) * res;
+	vec3 p111 = pos + vec3(1, 1, 1) * res;
+
+	target->AddTriangle(p000, p001, p011);
+	target->AddTriangle(p000, p011, p010);
+	target->AddTriangle(p100, p101, p111);
+	target->AddTriangle(p100, p111, p110);
+	
+	target->AddTriangle(p000, p001, p101);
+	target->AddTriangle(p000, p101, p100);
+	target->AddTriangle(p010, p011, p111);
+	target->AddTriangle(p010, p111, p110);
+
+	target->AddTriangle(p000, p010, p110);
+	target->AddTriangle(p000, p110, p100);
+	target->AddTriangle(p001, p011, p111);
+	target->AddTriangle(p001, p111, p101);
+
+
+	target->AddTriangle(p000, p011, p001);
+	target->AddTriangle(p000, p010, p011);
+	target->AddTriangle(p100, p111, p101);
+	target->AddTriangle(p100, p110, p111);
+
+	target->AddTriangle(p000, p101, p001);
+	target->AddTriangle(p000, p100, p101);
+	target->AddTriangle(p010, p111, p011);
+	target->AddTriangle(p010, p110, p111);
+
+	target->AddTriangle(p000, p110, p010);
+	target->AddTriangle(p000, p100, p110);
+	target->AddTriangle(p001, p111, p011);
+	target->AddTriangle(p001, p101, p111);
+
+}
+
+bool OctRepNode::RequiresHigherDetail(const float& isoLevel, const uint32& minRes) const
+{
+	// Doesn't require any higher detail than the min res
+	if (m_resolution <= minRes)
+		return false;
+
+	// Check if children need it
+	for (OctRepNode* child : m_children)
+		if (child != nullptr && child->RequiresHigherDetail(isoLevel, minRes))
+			return true;
+
+	// Check child's cases to see if any require more detail
+	for (OctRepNode* child : m_children)
+		if (child != nullptr)
+		{
+			float v000 = child->m_values[GetIndex(0, 0, 0)];
+			float v001 = child->m_values[GetIndex(0, 0, 1)];
+			float v010 = child->m_values[GetIndex(0, 1, 0)];
+			float v011 = child->m_values[GetIndex(0, 1, 1)];
+			float v100 = child->m_values[GetIndex(1, 0, 0)];
+			float v101 = child->m_values[GetIndex(1, 0, 1)];
+			float v110 = child->m_values[GetIndex(1, 1, 0)];
+			float v111 = child->m_values[GetIndex(1, 1, 1)];
+
+			// Calculate the current case
+			uint8 caseIndex = 0;
+			if (v000 >= isoLevel) caseIndex |= 1;
+			if (v100 >= isoLevel) caseIndex |= 2;
+			if (v101 >= isoLevel) caseIndex |= 4;
+			if (v001 >= isoLevel) caseIndex |= 8;
+			if (v010 >= isoLevel) caseIndex |= 16;
+			if (v110 >= isoLevel) caseIndex |= 32;
+			if (v111 >= isoLevel) caseIndex |= 64;
+			if (v011 >= isoLevel) caseIndex |= 128;
+
+			// Fully inside iso-surface
+			if (caseIndex == 0 || caseIndex == 255)
+				continue;
+			else
+				return true;
+
+			//if (child->GetStdDeviation() < 0.03f)
+			//	return true;
+
+			// Check if any children aren't simple cases
+			// TODO
+
+		}
+
+	//return false;
+
+	return GetStdDeviation() < 0.03f;
+	//return GetStdDeviation() > 0.115f;
 }
 
 
@@ -332,8 +466,13 @@ vec3 OctreeRepLayer::ProjectCorners(const float& isoLevel, const uvec3& a, const
 		edges.push_back(MC::VertexLerp(isoLevel, topRight, bottomRight, vTR, vBR));
 
 
-	std::sort(edges.begin(), edges.end(), [highRes](const vec3& a, const vec3& b) { return glm::distance(highRes, a) < glm::distance(highRes, b); });
+	if (edges.size() == 0 || edges.size() == 4)
+		return highRes;
+	else if (edges.size() == 1)
+		return edges[0];
 
+
+	std::sort(edges.begin(), edges.end(), [highRes](const vec3& a, const vec3& b) { return glm::distance(highRes, a) < glm::distance(highRes, b); });
 	const vec3& A = edges[0];
 	const vec3& B = edges[1];
 	const vec3& P = highRes;
@@ -343,149 +482,11 @@ vec3 OctreeRepLayer::ProjectCorners(const float& isoLevel, const uvec3& a, const
 	return A + glm::dot(AP, AB) / glm::dot(AB, AB) * AB;
 }
 
-vec3 OctreeRepLayer::VertexLerp(const float& isoLevel, const uvec3& a, const uvec3& b) const
-{
-	const uint32 stride = m_resolution - 1; 
-	const uvec3 mid = (a + b) / 2U;
-	const uvec3 local = (mid / stride) * stride; // Node that this edge belongs to
-	
-
-	// Where it would usually be expected to be
-	const vec3 highRes = MC::VertexLerp(isoLevel, a, b, m_volume->Get(a.x, a.y, a.z), m_volume->Get(b.x, b.y, b.z));
-
-	const uvec3 remA = a % stride;
-	const uvec3 remB = b % stride;
-
-	const float aVal = m_volume->Get(a.x, a.y, a.z);
-	const float bVal = m_volume->Get(b.x, b.y, b.z);
-	
-
-	// Edge exists on x axis
-	if (a.x != b.x) // Implies a.y == b.y && a.z == b.z
-	{
-		// Sort to make sure A < B
-		const uvec3& A = a.x < b.x ? a : b;
-		const uvec3& B = a.x < b.x ? b : a;
-		const float& AVal = a.x < b.x ? aVal : bVal;
-		const float& BVal = a.x < b.x ? bVal : aVal;
-
-		// Check if is edge of node
-		if (remA.y == 0 && remA.z == 0)
-		{
-			const uvec3 next = local + uvec3(stride, 0, 0);
-			return MC::VertexLerp(isoLevel, local, next, m_volume->Get(local.x, local.y, local.z), m_volume->Get(next.x, next.y, next.z));
-		}
-
-		// Edge shared between y face
-		if (remA.y == 0)
-		{
-			// Check (X,Z)
-			const uvec3 bottomLeft = local;
-			const uvec3 bottomRight = local + uvec3(stride, 0, 0);
-			const uvec3 topLeft = local + uvec3(0, 0, stride);
-			const uvec3 topRight = local + uvec3(stride, 0, stride);
-
-			return ProjectCorners(isoLevel, a, b, bottomLeft, bottomRight, topLeft, topRight);
-		}
-
-		// Edge shared between z face
-		if (remA.z == 0)
-		{
-			// Check (X,Y)
-			const uvec3 bottomLeft = local;
-			const uvec3 bottomRight = local + uvec3(stride, 0, 0);
-			const uvec3 topLeft = local + uvec3(0, stride, 0);
-			const uvec3 topRight = local + uvec3(stride, stride, 0);
-
-			return ProjectCorners(isoLevel, a, b, bottomLeft, bottomRight, topLeft, topRight);
-		}
-	}
-
-	// Edge exists on y axis
-	if (a.y != b.y) // Implies a.x == b.x && a.z == b.z
-	{
-		// Check if is edge of node
-		if (remA.x == 0 && remA.z == 0)
-		{
-			const uvec3 next = local + uvec3(0, stride, 0);
-			return MC::VertexLerp(isoLevel, local, next, m_volume->Get(local.x, local.y, local.z), m_volume->Get(next.x, next.y, next.z));
-		}
-
-		// Edge shared between x face
-		if (remA.x == 0)
-		{
-			// Check (Y,Z)
-			const uvec3 bottomLeft = local;
-			const uvec3 bottomRight = local + uvec3(0, stride, 0);
-			const uvec3 topLeft = local + uvec3(0, 0, stride);
-			const uvec3 topRight = local + uvec3(0, stride, stride);
-
-			return ProjectCorners(isoLevel, a, b, bottomLeft, bottomRight, topLeft, topRight);
-		}
-
-		// Edge shared between z face
-		if (remA.z == 0)
-		{
-			// Check (Y,X)
-			const uvec3 bottomLeft = local;
-			const uvec3 bottomRight = local + uvec3(0, stride, 0);
-			const uvec3 topLeft = local + uvec3(stride, 0, 0);
-			const uvec3 topRight = local + uvec3(stride, stride, 0);
-
-			return ProjectCorners(isoLevel, a, b, bottomLeft, bottomRight, topLeft, topRight);
-		}
-	}
-
-	// Edge exists on z axis
-	if (a.z != b.z) // Implies a.x == b.x && a.y == b.y
-	{
-		// Check if is edge of node
-		if (remA.x == 0 && remA.y == 0)
-		{
-			const uvec3 next = local + uvec3(0, 0, stride);
-			return MC::VertexLerp(isoLevel, local, next, m_volume->Get(local.x, local.y, local.z), m_volume->Get(next.x, next.y, next.z));
-		}
-
-		// Edge shared between x face
-		if (remA.x == 0)
-		{
-			// Check (Z,Y)
-			const uvec3 bottomLeft = local;
-			const uvec3 bottomRight = local + uvec3(0, 0, stride);
-			const uvec3 topLeft = local + uvec3(0, stride, 0);
-			const uvec3 topRight = local + uvec3(0, stride, stride);
-
-			return ProjectCorners(isoLevel, a, b, bottomLeft, bottomRight, topLeft, topRight);
-		}
-
-		// Edge shared between y face
-		if (remA.y == 0)
-		{
-			// Check (Z,X)
-			const uvec3 bottomLeft = local;
-			const uvec3 bottomRight = local + uvec3(0, 0, stride);
-			const uvec3 topLeft = local + uvec3(stride, 0, 0);
-			const uvec3 topRight = local + uvec3(stride, 0, stride);
-
-			return ProjectCorners(isoLevel, a, b, bottomLeft, bottomRight, topLeft, topRight);
-		}
-	}
-
-	
-	return highRes;
-}
-
 vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const uvec3& b, const uint32& minRes)
 {
 	// Lowest resolution, so just return normal edge
-	if (m_resolution <= minRes)
+	if (m_resolution <= minRes || nextLayer == nullptr)
 		return MC::VertexLerp(isoLevel, a, b, m_volume->Get(a.x, a.y, a.z), m_volume->Get(b.x, b.y, b.z));
-
-	return VertexLerp(isoLevel, a, b);
-
-
-	const float aVal = m_volume->Get(a.x, a.y, a.z);
-	const float bVal = m_volume->Get(b.x, b.y, b.z);
 
 	const uint32 stride = m_resolution - 1;
 	const uvec3 local = (((a + b) / 2U) / stride) * stride; // Node that this edge belongs to
@@ -494,28 +495,26 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 	const uvec3 remB = b % stride;
 
 
+	// Fully embedded at this resolution, so reduce it
+	if(!(remA.x == 0 || remA.y == 0 || remA.z == 0 || remB.x == 0 || remB.y == 0 || remB.z == 0))
+		return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
+
 	// Edge exists on x axis
 	if (a.x != b.x) // Implies a.y == b.y && a.z == b.z
 	{
-		// Sort to make sure A < B
-		const uvec3& A = a.x < b.x ? a : b;
-		const uvec3& B = a.x < b.x ? b : a;
-		const float& AVal = a.x < b.x ? aVal : bVal;
-		const float& BVal = a.x < b.x ? bVal : aVal;
-
 		// Check if is edge of node
 		if (remA.y == 0 && remA.z == 0)
 		{
 			// Check whether any nodes at this edge are built at this res
 			OctRepNode* node;
 			bool useThisRes = false;
-			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail())
+			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
-			else if (AttemptGet(local.x + 0, local.y + 0, local.z + stride, node) && !node->RequiresHigherDetail())
+			else if (AttemptGet(local.x + 0, local.y + 0, local.z - stride, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
-			else if (AttemptGet(local.x + 0, local.y + stride, local.z + 0, node) && !node->RequiresHigherDetail())
+			else if (AttemptGet(local.x + 0, local.y - stride, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
-			else if (AttemptGet(local.x + 0, local.y + stride, local.z + stride, node) && !node->RequiresHigherDetail())
+			else if (AttemptGet(local.x + 0, local.y - stride, local.z - stride, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
 
 
@@ -524,12 +523,40 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 
 
 			const uvec3 next = local + uvec3(stride, 0, 0);
-			return MC::VertexLerp(isoLevel, local, next, m_volume->Get(local.x, local.y, local.z), m_volume->Get(next.x, next.y, next.z));
+			const float localV = m_volume->Get(local.x, local.y, local.z);
+			const float nextV = m_volume->Get(next.x, next.y, next.z);
+
+			if (localV < isoLevel && nextV < isoLevel)
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes); // There's not an edge at this resolution
+			else
+				return MC::VertexLerp(isoLevel, local, next, localV, nextV);
+
+			// Debug
+			vec3 p = MC::VertexLerp(isoLevel, local, next, m_volume->Get(local.x, local.y, local.z), m_volume->Get(next.x, next.y, next.z));
+
+			if (p.x < local.x || p.x > next.x)
+			{
+				LOG("res %i (%i,%i,%i)[%f]->(%i,%i,%i)[%f] = (%f,%f,%f)", m_resolution, local.x, local.y, local.z, m_volume->Get(local.x, local.y, local.z), next.x, next.y, next.z, m_volume->Get(next.x, next.y, next.z), p.x, p.y, p.z);
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
+			}
+
+			return p;
 		}
 
 		// Edge shared between y face
 		if (remA.y == 0)
 		{
+			// Check whether any nodes at this edge are built at this res
+			OctRepNode* node;
+			bool useThisRes = false;
+			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+			else if (AttemptGet(local.x + 0, local.y - stride, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+
+			if (!useThisRes)
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
+
 			// Check (X,Z)
 			const uvec3 bottomLeft = local;
 			const uvec3 bottomRight = local + uvec3(stride, 0, 0);
@@ -542,6 +569,17 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 		// Edge shared between z face
 		if (remA.z == 0)
 		{
+			// Check whether any nodes at this edge are built at this res
+			OctRepNode* node;
+			bool useThisRes = false;
+			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+			else if (AttemptGet(local.x + 0, local.y + 0, local.z - stride, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+
+			if (!useThisRes)
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
+
 			// Check (X,Y)
 			const uvec3 bottomLeft = local;
 			const uvec3 bottomRight = local + uvec3(stride, 0, 0);
@@ -561,13 +599,13 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 			// Check whether any nodes at this edge are built at this res
 			OctRepNode* node;
 			bool useThisRes = false;
-			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail())
+			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
-			else if (AttemptGet(local.x + 0, local.y + 0, local.z + stride, node) && !node->RequiresHigherDetail())
+			else if (AttemptGet(local.x + 0, local.y + 0, local.z - stride, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
-			else if (AttemptGet(local.x + stride, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail())
+			else if (AttemptGet(local.x - stride, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
-			else if (AttemptGet(local.x + stride, local.y + 0, local.z + stride, node) && !node->RequiresHigherDetail())
+			else if (AttemptGet(local.x - stride, local.y + 0, local.z - stride, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
 
 
@@ -576,12 +614,29 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 
 
 			const uvec3 next = local + uvec3(0, stride, 0);
-			return MC::VertexLerp(isoLevel, local, next, m_volume->Get(local.x, local.y, local.z), m_volume->Get(next.x, next.y, next.z));
+			const float localV = m_volume->Get(local.x, local.y, local.z);
+			const float nextV = m_volume->Get(next.x, next.y, next.z);
+
+			if (localV < isoLevel && nextV < isoLevel)
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes); // There's not an edge at this resolution
+			else
+				return MC::VertexLerp(isoLevel, local, next, localV, nextV);
 		}
 
 		// Edge shared between x face
 		if (remA.x == 0)
 		{
+			// Check whether any nodes at this edge are built at this res
+			OctRepNode* node;
+			bool useThisRes = false;
+			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+			else if (AttemptGet(local.x - stride, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+
+			if (!useThisRes)
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
+
 			// Check (Y,Z)
 			const uvec3 bottomLeft = local;
 			const uvec3 bottomRight = local + uvec3(0, stride, 0);
@@ -594,6 +649,18 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 		// Edge shared between z face
 		if (remA.z == 0)
 		{
+			// Check whether any nodes at this edge are built at this res
+			OctRepNode* node;
+			bool useThisRes = false;
+			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+			else if (AttemptGet(local.x + 0, local.y + 0, local.z - stride, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+
+			if (!useThisRes)
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
+
+
 			// Check (Y,X)
 			const uvec3 bottomLeft = local;
 			const uvec3 bottomRight = local + uvec3(0, stride, 0);
@@ -613,13 +680,13 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 			// Check whether any nodes at this edge are built at this res
 			OctRepNode* node;
 			bool useThisRes = false;
-			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail())
+			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
-			else if (AttemptGet(local.x + 0, local.y + stride, local.z + 0, node) && !node->RequiresHigherDetail())
+			else if (AttemptGet(local.x + 0, local.y - stride, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
-			else if (AttemptGet(local.x + stride, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail())
+			else if (AttemptGet(local.x - stride, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
-			else if (AttemptGet(local.x + stride, local.y + stride, local.z + 0, node) && !node->RequiresHigherDetail())
+			else if (AttemptGet(local.x - stride, local.y - stride, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
 				useThisRes = true;
 
 
@@ -628,12 +695,30 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 
 
 			const uvec3 next = local + uvec3(0, 0, stride);
-			return MC::VertexLerp(isoLevel, local, next, m_volume->Get(local.x, local.y, local.z), m_volume->Get(next.x, next.y, next.z));
+			const float localV = m_volume->Get(local.x, local.y, local.z);
+			const float nextV = m_volume->Get(next.x, next.y, next.z);
+
+			if (localV < isoLevel && nextV < isoLevel)
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes); // There's not an edge at this resolution
+			else
+				return MC::VertexLerp(isoLevel, local, next, localV, nextV);
 		}
 
 		// Edge shared between x face
 		if (remA.x == 0)
 		{
+			// Check whether any nodes at this edge are built at this res
+			OctRepNode* node;
+			bool useThisRes = false;
+			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+			else if (AttemptGet(local.x - stride, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+
+			if (!useThisRes)
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
+
+
 			// Check (Z,Y)
 			const uvec3 bottomLeft = local;
 			const uvec3 bottomRight = local + uvec3(0, 0, stride);
@@ -646,6 +731,18 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 		// Edge shared between y face
 		if (remA.y == 0)
 		{
+			// Check whether any nodes at this edge are built at this res
+			OctRepNode* node;
+			bool useThisRes = false;
+			if (AttemptGet(local.x + 0, local.y + 0, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+			else if (AttemptGet(local.x + 0, local.y - stride, local.z + 0, node) && !node->RequiresHigherDetail(isoLevel, minRes))
+				useThisRes = true;
+
+			if (!useThisRes)
+				return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
+
+
 			// Check (Z,X)
 			const uvec3 bottomLeft = local;
 			const uvec3 bottomRight = local + uvec3(0, 0, stride);
@@ -1083,62 +1180,6 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 	return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
 }
 
-float OctreeRepLayer::FetchIsoValue(const uint32& x, const uint32& y, const uint32& z) const
-{
-	// Lowest resolution, so just return the value
-	if (m_resolution == 2)
-		return m_volume->Get(x, y, z);
-
-
-	// Find node that contains this point
-	const uint32 stride = m_resolution - 1;
-	uvec3 local((x / stride) * stride, (y / stride) * stride, (z / stride) * stride);
-
-	// Can't find node containing this coord, so must be empty
-	auto it = m_nodes.find(local);
-	if (it == m_nodes.end())
-		return DEFAULT_VALUE;
-
-
-	// Check the next layer
-	if (it->second->RequiresHigherDetail() && false)
-		return nextLayer->FetchIsoValue(x, y, z);
-
-	// Corner value
-	else if(x % stride == 0 && y % stride == 0 && z % stride == 0)
-		return m_volume->Get(x, y, z);
-
-	// Interpolate corners to get value
-	else
-	{
-		float xf = (x % m_resolution) / m_resolution;
-		float yf = (y % m_resolution) / m_resolution;
-		float zf = (z % m_resolution) / m_resolution;
-
-		const float v000 = m_volume->Get(local.x + 0 * stride, local.y + 0 * stride, local.z + 0 * stride);
-		const float v001 = m_volume->Get(local.x + 0 * stride, local.y + 0 * stride, local.z + 1 * stride);
-		const float v010 = m_volume->Get(local.x + 0 * stride, local.y + 1 * stride, local.z + 0 * stride);
-		const float v011 = m_volume->Get(local.x + 0 * stride, local.y + 1 * stride, local.z + 1 * stride);
-		const float v100 = m_volume->Get(local.x + 1 * stride, local.y + 0 * stride, local.z + 0 * stride);
-		const float v101 = m_volume->Get(local.x + 1 * stride, local.y + 0 * stride, local.z + 1 * stride);
-		const float v110 = m_volume->Get(local.x + 1 * stride, local.y + 1 * stride, local.z + 0 * stride);
-		const float v111 = m_volume->Get(local.x + 1 * stride, local.y + 1 * stride, local.z + 1 * stride);
-
-		// Lerp along axis
-		const float vX00 = v000 * (1.0f - xf) + v100 * xf;
-		const float vX10 = v010 * (1.0f - xf) + v110 * xf;
-		const float vX01 = v001 * (1.0f - xf) + v101 * xf;
-		const float vX11 = v011 * (1.0f - xf) + v111 * xf;
-
-		const float vY0 = vX00 * (1.0f - yf) + vX10 * yf;
-		const float vY1 = vX01 * (1.0f - yf) + vX11 * yf;
-
-		//return volume->Get(x, y, z);
-		return vY0 * (1.0f - zf) + vY1 * zf;
-	}	
-}
-
-
 
 ///
 /// Octree object
@@ -1157,6 +1198,11 @@ OctreeRepVolume::~OctreeRepVolume()
 	if (m_mesh != nullptr)
 		delete m_mesh;
 
+	if (m_debugMesh != nullptr)
+		delete m_debugMesh;
+	if (m_debugMaterial != nullptr)
+		delete m_debugMaterial;
+
 	if (m_octree != nullptr)
 		delete m_octree;
 }
@@ -1168,10 +1214,14 @@ OctreeRepVolume::~OctreeRepVolume()
 void OctreeRepVolume::Begin() 
 {
 	m_material = new DefaultMaterial;
-	m_wireMaterial = new InteractionMaterial;
+	m_wireMaterial = new InteractionMaterial(vec4(0.0f, 1.0f, 0.0f, 1.0f));
+	m_debugMaterial = new InteractionMaterial(vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
 	m_mesh = new Mesh;
 	m_mesh->MarkDynamic();
+
+	m_debugMesh = new Mesh;
+	m_debugMesh->MarkDynamic();
 }
 
 void OctreeRepVolume::Update(const float & deltaTime)
@@ -1215,6 +1265,27 @@ void OctreeRepVolume::Draw(const Window * window, const float & deltaTime)
 			m_wireMaterial->Unbind(window, GetLevel());
 		}
 	}
+
+	if (keyboard->IsKeyDown(Keyboard::Key::KV_F) && m_debugMesh != nullptr && m_debugMaterial != nullptr)
+	{
+		Transform t;
+		m_debugMaterial->Bind(window, GetLevel());
+		m_debugMaterial->PrepareMesh(m_debugMesh);
+		m_debugMaterial->RenderInstance(&t);
+		m_debugMaterial->Unbind(window, GetLevel());
+	}
+
+	// Completely rebuild mesh
+	if (keyboard->IsKeyPressed(Keyboard::Key::KV_N))
+	{
+		for (auto& pair : m_nodeLevel)
+			pair.second.isStale = true;
+		for (auto& pair : m_nodedebugLevel)
+			pair.second.isStale = true;
+
+		BuildMesh();
+		LOG("Done");
+	}
 }
 
 
@@ -1244,12 +1315,13 @@ void OctreeRepVolume::Init(const uvec3 & resolution, const vec3 & scale)
 	m_layers.clear();
 
 	// Setup layers
-	m_layers.emplace_back(this, 1U + (uint32)pow(2, 3));
+	//m_layers.emplace_back(this, 1U + (uint32)pow(2, 3));
 	m_layers.emplace_back(this, 1U + (uint32)pow(2, 2));
 	m_layers.emplace_back(this, 1U + (uint32)pow(2, 1));
 	m_layers.emplace_back(this, 1U + (uint32)pow(2, 0));
-	for (uint32 i = 0; i < m_layers.size() - 1; ++i)
-		m_layers[i].nextLayer = &m_layers[i + 1];
+	if(m_layers.size() > 1)
+		for (uint32 i = 0; i < m_layers.size() - 1; ++i)
+			m_layers[i].nextLayer = &m_layers[i + 1];
 }
 
 void OctreeRepVolume::Set(uint32 x, uint32 y, uint32 z, float value)
@@ -1289,12 +1361,19 @@ void OctreeRepVolume::Set(uint32 x, uint32 y, uint32 z, float value)
 		auto it = m_nodeLevel.find(node);
 		if (it != m_nodeLevel.end())
 			m_nodeLevel.erase(it);
+
+		auto it2 = m_nodedebugLevel.find(node);
+		if (it2 != m_nodedebugLevel.end())
+			m_nodedebugLevel.erase(it2);
 	}
 
 	// Add leaf nodes to list
 	for (OctRepNode* node : changes.newNodes)
 		if (node->GetResolution() == m_layers[0].GetResolution())
+		{
 			(m_nodeLevel[node] = VoxelPartialMeshData()).isStale = true;
+			(m_nodedebugLevel[node] = VoxelPartialMeshData()).isStale = true;
+		}
 
 
 	// Update leaf nodes to list
@@ -1303,6 +1382,10 @@ void OctreeRepVolume::Set(uint32 x, uint32 y, uint32 z, float value)
 		auto it = m_nodeLevel.find(node);
 		if (it != m_nodeLevel.end())
 			it->second.isStale = true;
+
+		auto it2 = m_nodedebugLevel.find(node);
+		if (it2 != m_nodedebugLevel.end())
+			it2->second.isStale = true;
 	}
 
 
@@ -1325,40 +1408,64 @@ float OctreeRepVolume::Get(uint32 x, uint32 y, uint32 z) const
 	return m_data[GetIndex(x, y, z)];
 }
 
-void OctreeRepVolume::BuildMesh() 
+void OctreeRepVolume::BuildMesh()
 {
 	// Regen partial meshes and add them together to make main mesh
-	MeshBuilderMinimal builder;
-	builder.MarkDynamic();
-
-	for (auto& pair : m_nodeLevel)
 	{
-		// Rebuild mesh data
-		if (pair.second.isStale)
+		MeshBuilderMinimal builder;
+		builder.MarkDynamic();
+
+		for (auto& pair : m_nodeLevel)
 		{
-			pair.second.Clear();
-			using namespace std::placeholders;
-			pair.first->GeneratePartialMesh(m_isoLevel, std::bind(&OctreeRepLayer::RetrieveEdge, &m_layers[0], _1, _2, _3, _4), &pair.second);
-			pair.second.isStale = false;
+			// Rebuild mesh data
+			if (pair.second.isStale)
+			{
+				pair.second.Clear();
+				using namespace std::placeholders;
+				pair.first->GeneratePartialMesh(m_isoLevel, std::bind(&OctreeRepLayer::RetrieveEdge, &m_layers[0], _1, _2, _3, _4), &pair.second, m_layers[m_layers.size() - 1].GetResolution());
+				pair.second.isStale = false;
+			}
+
+			// Add triangles to mesh
+			for (const auto& tri : pair.second.triangles)
+			{
+				const uint32 a = builder.AddVertex(tri.a, tri.weightedNormal);
+				const uint32 b = builder.AddVertex(tri.b, tri.weightedNormal);
+				const uint32 c = builder.AddVertex(tri.c, tri.weightedNormal);
+				builder.AddTriangle(a, b, c);
+			}
 		}
 
-		// Add triangles to mesh
-		for (const auto& tri : pair.second.triangles)
-		{
-			const uint32 a = builder.AddVertex(tri.a, tri.weightedNormal);
-			const uint32 b = builder.AddVertex(tri.b, tri.weightedNormal);
-			const uint32 c = builder.AddVertex(tri.c, tri.weightedNormal);
-			builder.AddTriangle(a, b, c);
-		}
+		builder.BuildMesh(m_mesh);
 	}
 
-	builder.BuildMesh(m_mesh);
-}
 
-float OctreeRepVolume::GetIsoValue(const uint32& x, const uint32& y, const uint32& z) const
-{
-	if (x >= m_resolution.x || y >= m_resolution.y || z >= m_resolution.z)
-		return UNKNOWN_BUILD_VALUE;
+	if(m_debugMesh)
+	{
+		MeshBuilderMinimal debugBuilder;
+		debugBuilder.MarkDynamic();
 
-	return m_layers[0].FetchIsoValue(x, y, z);
+		for (auto& pair : m_nodedebugLevel)
+		{
+			// Rebuild mesh data
+			if (pair.second.isStale)
+			{
+				pair.second.Clear();
+				using namespace std::placeholders;
+				pair.first->GenerateDebugPartialMesh(m_isoLevel, &pair.second, m_layers[m_layers.size() - 1].GetResolution());
+				pair.second.isStale = false;
+			}
+
+			// Add triangles to mesh
+			for (const auto& tri : pair.second.triangles)
+			{
+				const uint32 a = debugBuilder.AddVertex(tri.a, tri.weightedNormal);
+				const uint32 b = debugBuilder.AddVertex(tri.b, tri.weightedNormal);
+				const uint32 c = debugBuilder.AddVertex(tri.c, tri.weightedNormal);
+				debugBuilder.AddTriangle(a, b, c);
+			}
+		}
+
+		debugBuilder.BuildMesh(m_debugMesh);
+	}
 }

@@ -41,6 +41,7 @@ public:
 	bool isStale;
 
 	inline void AddTriangle(const vec3& a, const vec3& b, const vec3& c, const vec3& weightedNormal) { triangles.emplace_back(a, b, c, weightedNormal); }
+	inline void AddTriangle(const vec3& a, const vec3& b, const vec3& c) { triangles.emplace_back(a, b, c, glm::cross(b - a, c - a)); }
 	inline void Clear() { triangles.clear(); isStale = false; }
 };
 

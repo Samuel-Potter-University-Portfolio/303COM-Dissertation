@@ -74,14 +74,21 @@ public:
 	* @param edgeCallback		Retreive an appropriately placed edge
 	* @param target				Where to store the newly generated mesh data
 	*/
-	void GeneratePartialMesh(const float& isoLevel, RetrieveEdgeCallback edgeCallback, VoxelPartialMeshData* target);
+	void GeneratePartialMesh(const float& isoLevel, RetrieveEdgeCallback edgeCallback, VoxelPartialMeshData* target, const uint32& minRes);
+
+	/**
+	* Generate the partial mesh for this node
+	* @param isoLevel			The isoLevel to use in MC
+	* @param target				Where to store the newly generated mesh data
+	*/
+	void GenerateDebugPartialMesh(const float& isoLevel, VoxelPartialMeshData* target, const uint32& minRes);
 
 	///
 	/// Getters & Setters
 	///
 public:
 	bool IsDefaultValues() const;
-	bool RequiresHigherDetail() const;
+	bool RequiresHigherDetail(const float& isoLevel, const uint32& minRes) const;
 
 	inline float GetAverage() const { return m_average; }
 	inline float GetStdDeviation() const { return m_stdDeviation; }
@@ -128,12 +135,6 @@ public:
 	* @param minRes			The minimum resolution to consider before using default value
 	*/
 	vec3 RetrieveEdge(const float& isoLevel, const uvec3& a, const uvec3& b, const uint32& minRes);
-
-	/**
-	* Fetch the drawn isovalue for a given world coordinate
-	* @param x,y,z			World coordinates
-	*/
-	float FetchIsoValue(const uint32& x, const uint32& y, const uint32& z) const;
 	
 	/**
 	* Attempt to find a node if it exists
@@ -154,15 +155,6 @@ public:
 	void OnDeleteNode(const OctRepNode* node);
 
 private:
-	/**
-	* Perform smooth MC vertex lerp for this layer
-	* @param isoLevel		The isoLevel to place the edge at
-	* @param a				Coord of first point
-	* @param b				Coord of second point
-	* @returns Where this edge is expected to be
-	*/
-	vec3 VertexLerp(const float& isoLevel, const uvec3& a, const uvec3& b) const;
-
 	vec3 ProjectCorners(const float& isoLevel, const uvec3& a, const uvec3& b, const uvec3& bottomLeft, const uvec3& bottomRight, const uvec3& topLeft, const uvec3& topRight) const;
 
 public:
@@ -185,7 +177,9 @@ private:
 	///
 	Material* m_material = nullptr;
 	Material* m_wireMaterial = nullptr;
+	Material* m_debugMaterial = nullptr;
 	Mesh* m_mesh = nullptr;
+	Mesh* m_debugMesh = nullptr;
 
 	///
 	/// Volume vars
@@ -202,6 +196,7 @@ private:
 	/// Levels vars
 	///
 	std::unordered_map<OctRepNode*, VoxelPartialMeshData> m_nodeLevel;
+	std::unordered_map<OctRepNode*, VoxelPartialMeshData> m_nodedebugLevel;
 
 
 	bool TEST_REBUILD = false;
@@ -236,14 +231,6 @@ public:
 
 	// TODO - MAKE PROPER
 	void BuildMesh();
-public:
-	/**
-	* Fetch the isovalue for this given coordinate
-	* @param x,y,z			The local coordnate to lookup
-	* @returns The appropriate isovalue use for drawing
-	*/
-	float GetIsoValue(const uint32& x, const uint32& y, const uint32& z) const;
-
 
 	///
 	/// Getters & Setters
