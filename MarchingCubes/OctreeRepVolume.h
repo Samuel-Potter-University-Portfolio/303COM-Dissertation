@@ -83,12 +83,15 @@ public:
 	*/
 	void GenerateDebugPartialMesh(const float& isoLevel, VoxelPartialMeshData* target, const uint32& minRes);
 
+	bool RequiresHigherDetail(const float& isoLevel, const uint32& minRes) const;
+
+	bool HasMultipleEdgeIntersections(const float& isoLevel, const uint32& minRes) const;
+
 	///
 	/// Getters & Setters
 	///
 public:
 	bool IsDefaultValues() const;
-	bool RequiresHigherDetail(const float& isoLevel, const uint32& minRes) const;
 
 	inline float GetAverage() const { return m_average; }
 	inline float GetStdDeviation() const { return m_stdDeviation; }

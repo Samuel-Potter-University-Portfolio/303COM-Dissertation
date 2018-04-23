@@ -1,5 +1,6 @@
 #include "OctreeRepVolume.h"
 #include "Logger.h"
+#include <unordered_set>
 
 #include "DefaultMaterial.h"
 #include "InteractionMaterial.h"
@@ -347,14 +348,56 @@ void OctRepNode::GenerateDebugPartialMesh(const float& isoLevel, VoxelPartialMes
 
 bool OctRepNode::RequiresHigherDetail(const float& isoLevel, const uint32& minRes) const
 {
+	// Simple cases are those which are represented by a single connected face
+	static std::unordered_set<uint8> simpleCases({ 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 19, 23, 25, 27, 29, 31, 32, 34, 35, 38, 39, 43, 46, 47, 48, 49, 50, 51, 54, 55, 57, 59, 63, 64, 68, 70, 71, 76, 77, 78, 79, 96, 98, 99, 100, 102, 103, 108, 110, 111, 112, 113, 114, 115, 116, 118, 119, 127, 128, 136, 137, 139, 140, 141, 142, 143, 144, 145, 147, 152, 153, 155, 156, 157, 159, 176, 177, 178, 179, 184, 185, 187, 191, 192, 196, 198, 200, 201, 204, 205, 206, 207, 208, 209, 212, 216, 217, 220, 221, 223, 224, 226, 228, 230, 232, 236, 238, 239, 240, 241, 242, 243, 244, 246, 247, 248, 249, 251, 252, 253, 254 });
+
 	// Doesn't require any higher detail than the min res
 	if (m_resolution <= minRes)
 		return false;
+
 
 	// Check if children need it
 	for (OctRepNode* child : m_children)
 		if (child != nullptr && child->RequiresHigherDetail(isoLevel, minRes))
 			return true;
+
+
+	// Requires more detail, if has multiple intersections
+	if (HasMultipleEdgeIntersections(isoLevel, minRes))
+		return true;
+
+
+	// If this case is not simple, do not merge
+	{
+		float v000 = m_values[GetIndex(0, 0, 0)];
+		float v001 = m_values[GetIndex(0, 0, 1)];
+		float v010 = m_values[GetIndex(0, 1, 0)];
+		float v011 = m_values[GetIndex(0, 1, 1)];
+		float v100 = m_values[GetIndex(1, 0, 0)];
+		float v101 = m_values[GetIndex(1, 0, 1)];
+		float v110 = m_values[GetIndex(1, 1, 0)];
+		float v111 = m_values[GetIndex(1, 1, 1)];
+
+		// Calculate the current case
+		uint8 caseIndex = 0;
+		if (v000 >= isoLevel) caseIndex |= 1;
+		if (v100 >= isoLevel) caseIndex |= 2;
+		if (v101 >= isoLevel) caseIndex |= 4;
+		if (v001 >= isoLevel) caseIndex |= 8;
+		if (v010 >= isoLevel) caseIndex |= 16;
+		if (v110 >= isoLevel) caseIndex |= 32;
+		if (v111 >= isoLevel) caseIndex |= 64;
+		if (v011 >= isoLevel) caseIndex |= 128;
+
+		// Fully inside iso-surface
+		//if (caseIndex == 0 || caseIndex == 255)
+		//	return false;
+
+		// This is not a simple case, so cannot be merged
+		if (simpleCases.find(caseIndex) == simpleCases.end())
+			return true;
+	}
+
 
 	// Check child's cases to see if any require more detail
 	for (OctRepNode* child : m_children)
@@ -383,23 +426,120 @@ bool OctRepNode::RequiresHigherDetail(const float& isoLevel, const uint32& minRe
 			// Fully inside iso-surface
 			if (caseIndex == 0 || caseIndex == 255)
 				continue;
-			else
-				return true;
+			//else
+			//	return true;
 
 			//if (child->GetStdDeviation() < 0.03f)
 			//	return true;
 
 			// Check if any children aren't simple cases
-			// TODO
-
+			if (simpleCases.find(caseIndex) == simpleCases.end())
+				return true;
 		}
 
-	//return false;
+	return false;
 
-	return GetStdDeviation() < 0.03f;
+	//return GetStdDeviation() < 0.03f;
 	//return GetStdDeviation() > 0.115f;
 }
 
+bool OctRepNode::HasMultipleEdgeIntersections(const float& isoLevel, const uint32& minRes) const 
+{
+	if (m_resolution <= minRes)
+		return false;
+
+	// If child has multiple intersections, then this node definately does
+	for (OctRepNode* child : m_children)
+		if (child != nullptr && child->HasMultipleEdgeIntersections(isoLevel, minRes))
+			return true;
+
+
+	// Check the childrens actual intersection points
+	auto GetChildValue = [this](const uint32& x, const uint32& y, const uint32& z)
+	{
+		const uint32 cx = x / 2;
+		const uint32 cy = y / 2;
+		const uint32 cz = z / 2;
+		OctRepNode* child = m_children[cx, cy, cz];
+		if (child)
+			return child->m_values[GetIndex(x - cx, y - cy, z - cz)];
+		else
+			return UNKNOWN_BUILD_VALUE;
+	};
+
+	// Store whether these values are above or below the isosurface
+	bool b000 = GetChildValue(0, 0, 0) >= isoLevel;
+	bool b100 = GetChildValue(1, 0, 0) >= isoLevel;
+	bool b200 = GetChildValue(2, 0, 0) >= isoLevel;
+
+	bool b201 = GetChildValue(2, 0, 1) >= isoLevel;
+	bool b202 = GetChildValue(2, 0, 2) >= isoLevel;
+
+	bool b002 = GetChildValue(0, 0, 2) >= isoLevel;
+	bool b102 = GetChildValue(1, 0, 2) >= isoLevel;
+
+	bool b001 = GetChildValue(0, 0, 1) >= isoLevel;
+
+	bool b020 = GetChildValue(0, 2, 0) >= isoLevel;
+	bool b120 = GetChildValue(1, 2, 0) >= isoLevel;
+	bool b220 = GetChildValue(2, 2, 0) >= isoLevel;
+
+	bool b221 = GetChildValue(2, 2, 1) >= isoLevel;
+	bool b222 = GetChildValue(2, 2, 2) >= isoLevel;
+
+	bool b022 = GetChildValue(0, 2, 2) >= isoLevel;
+	bool b122 = GetChildValue(1, 2, 2) >= isoLevel;
+
+	bool b021 = GetChildValue(0, 2, 1) >= isoLevel;
+
+	bool b010 = GetChildValue(0, 1, 0) >= isoLevel;
+	bool b210 = GetChildValue(2, 1, 0) >= isoLevel;
+	bool b212 = GetChildValue(2, 1, 2) >= isoLevel;
+	bool b012 = GetChildValue(0, 1, 2) >= isoLevel;
+
+
+	// Check edges, if state flips twice, there are 2 intersections
+	// Edge 0
+	if (b000 != b100 && b100 != b200)
+		return true;
+	// Edge 1
+	if (b200 != b201 && b201 != b202)
+		return true;
+	// Edge 2
+	if (b002 != b102 && b102 != b202)
+		return true;
+	// Edge 3
+	if (b000 != b001 && b001 != b002)
+		return true;
+
+	// Edge 4
+	if (b020 != b120 && b120 != b220)
+		return true;
+	// Edge 5
+	if (b220 != b221 && b221 != b222)
+		return true;
+	// Edge 6
+	if (b022 != b122 && b122 != b222)
+		return true;
+	// Edge 7
+	if (b020 != b021 && b021 != b022)
+		return true;
+
+	// Edge 8
+	if (b000 != b010 && b010 != b020)
+		return true;
+	// Edge 9
+	if (b200 != b210 && b210 != b220)
+		return true;
+	// Edge 10
+	if (b202 != b212 && b212 != b222)
+		return true;
+	// Edge 11
+	if (b002 != b012 && b012 != b022)
+		return true;
+
+	return false;
+}
 
 ///
 /// Octree layer
@@ -467,10 +607,20 @@ vec3 OctreeRepLayer::ProjectCorners(const float& isoLevel, const uvec3& a, const
 
 
 	if (edges.size() == 0 || edges.size() == 4)
+	{
+		LOG("0 %i", edges.size());
+		LOG("%f %f %f %f", vBL, vBR, vTL, vTR);
 		return highRes;
+	}
 	else if (edges.size() == 1)
+	{
+		LOG("1");
 		return edges[0];
-
+	}
+	else if (edges.size() == 3)
+	{
+		LOG("3");
+	}
 
 	std::sort(edges.begin(), edges.end(), [highRes](const vec3& a, const vec3& b) { return glm::distance(highRes, a) < glm::distance(highRes, b); });
 	const vec3& A = edges[0];
@@ -498,7 +648,7 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 	// Fully embedded at this resolution, so reduce it
 	if(!(remA.x == 0 || remA.y == 0 || remA.z == 0 || remB.x == 0 || remB.y == 0 || remB.z == 0))
 		return nextLayer->RetrieveEdge(isoLevel, a, b, minRes);
-
+	
 	// Edge exists on x axis
 	if (a.x != b.x) // Implies a.y == b.y && a.z == b.z
 	{
@@ -754,6 +904,7 @@ vec3 OctreeRepLayer::RetrieveEdge(const float& isoLevel, const uvec3& a, const u
 	}
 
 
+	return MC::VertexLerp(isoLevel, a, b, m_volume->Get(a.x, a.y, a.z), m_volume->Get(b.x, b.y, b.z));
 
 	/// Check if edge sits inbetween 2 octree nodes
 	// x axis edge 
@@ -1316,7 +1467,7 @@ void OctreeRepVolume::Init(const uvec3 & resolution, const vec3 & scale)
 
 	// Setup layers
 	//m_layers.emplace_back(this, 1U + (uint32)pow(2, 3));
-	m_layers.emplace_back(this, 1U + (uint32)pow(2, 2));
+	//m_layers.emplace_back(this, 1U + (uint32)pow(2, 2));
 	m_layers.emplace_back(this, 1U + (uint32)pow(2, 1));
 	m_layers.emplace_back(this, 1U + (uint32)pow(2, 0));
 	if(m_layers.size() > 1)

@@ -43,7 +43,7 @@ struct vec3_KeyFuncs
 {
 	inline size_t operator()(const vec3& v)const
 	{
-		return std::hash<int>()(v.x) ^ std::hash<int>()(v.y) ^ std::hash<int>()(v.z);
+		return std::hash<float>()(v.x) ^ std::hash<float>()(v.y) ^ std::hash<float>()(v.z);
 	}
 
 	inline bool operator()(const vec3& a, const vec3& b)const
@@ -56,7 +56,7 @@ struct uvec3_KeyFuncs
 {
 	inline size_t operator()(const uvec3& v)const
 	{
-		return std::hash<int>()(v.x) ^ std::hash<int>()(v.y) ^ std::hash<int>()(v.z);
+		return std::hash<uint32>()(v.x) ^ std::hash<uint32>()(v.y) ^ std::hash<uint32>()(v.z);
 	}
 
 	inline bool operator()(const uvec3& a, const uvec3& b)const
@@ -69,7 +69,7 @@ struct ivec3_KeyFuncs
 {
 	inline size_t operator()(const ivec3& v)const
 	{
-		return std::hash<int>()(v.x) ^ std::hash<int>()(v.y) ^ std::hash<int>()(v.z);
+		return std::hash<int32>()(v.x) ^ std::hash<int32>()(v.y) ^ std::hash<int32>()(v.z);
 	}
 
 	inline bool operator()(const ivec3& a, const ivec3& b)const
