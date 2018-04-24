@@ -49,13 +49,13 @@ void OctreeLayerNode::Push(const uint32& corner, const LayeredVolume* volume, co
 	// TODO - Calculate edges
 }
 
-void OctreeLayerNode::BuildMesh(const float& isoLevel, OctreeLayer* layer, MeshBuilderMinimal& builder)
+void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder)
 {
 	if (m_caseIndex == 255)
 		return;
 
-	const uint32 stride = layer->GetStride();
-	const uvec3 layerCoords = layer->GetLocalCoords(m_id);
+	const uint32 stride = m_layer->GetStride();
+	const uvec3 layerCoords = m_layer->GetLocalCoords(m_id);
 	const float stridef = stride;
 	const vec3 coordsf = layerCoords;
 	
@@ -100,11 +100,7 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, OctreeLayer* layer, MeshB
 		int8 edge2 = *(caseEdges++);
 
 		vec3 normal = glm::cross(edges[edge1] - edges[edge0], edges[edge2] - edges[edge0]);
-
-		vec3 A = edges[edge0];
-		vec3 B = edges[edge1];
-		vec3 C = edges[edge2];
-
+		
 		const uint32 a = builder.AddVertex(edges[edge0], normal);
 		const uint32 b = builder.AddVertex(edges[edge1], normal);
 		const uint32 c = builder.AddVertex(edges[edge2], normal);
@@ -117,9 +113,9 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, OctreeLayer* layer, MeshB
 /// Layer
 ///
 
-OctreeLayer::OctreeLayer(LayeredVolume* volume, const uint32& depth, const uint32& height, const uint32& resolution) :
+OctreeLayer::OctreeLayer(LayeredVolume* volume, const uint32& depth, const uint32& height, const uint32& nodeRes) :
 	m_volume(volume),
-	m_depth(depth), m_resolution(resolution), m_effectiveTotalResolution((volume->GetOctreeResolution() - 1) / GetStride() + 1),
+	m_depth(depth), m_nodeResolution(nodeRes), m_layerResolution((volume->GetOctreeResolution() - 1) / GetStride() + 1),
 	m_startIndex(depth == 0 ? 0 : (pow(8, depth) - 1) / 7) // Total nodes for a given height is (8^h - 1)/7
 {
 }
@@ -136,6 +132,7 @@ bool OctreeLayer::HandlePush(const uint32& x, const uint32& y, const uint32& z, 
 	// Check this resolution cares about this value
 	const uint32 stride = GetStride();
 
+	// Attempt to push the value onto nodes in this layer
 	if (x % stride != 0 || y % stride != 0 || z % stride != 0)
 		return false;
 
@@ -149,6 +146,8 @@ bool OctreeLayer::HandlePush(const uint32& x, const uint32& y, const uint32& z, 
 	PushValueOntoNode(local, ivec3(-1, 0, -1), value);
 	PushValueOntoNode(local, ivec3(-1, -1, 0), value);
 	PushValueOntoNode(local, ivec3(-1, -1, -1), value);
+
+	// Push on
 }
 
 void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offset, const float& value)
@@ -157,8 +156,7 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 	const uint32 id = GetID(nodeCoords.x, nodeCoords.y, nodeCoords.z);
 
 	// If id is outside of node range of this layer offset has overflowed
-
-	if (id < m_startIndex || id >= m_startIndex + m_effectiveTotalResolution*m_effectiveTotalResolution*m_effectiveTotalResolution)
+	if (id < m_startIndex || id >= m_startIndex + m_layerResolution*m_layerResolution*m_layerResolution)
 		return;
 
 
@@ -171,18 +169,19 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 		// Create node, if it's worth creating it
 		if (value >= m_volume->GetIsoLevel())
 		{
-			node = new OctreeLayerNode(id);
+			node = new OctreeLayerNode(id, this);
 			m_nodes[id] = node;
-
+			
 			// Init all corner node for this child
-			node->Push(CHILD_OFFSET_BACK_BOTTOM_LEFT,	m_volume, m_volume->Get(nodeCoords.x + 0, nodeCoords.y + 0, nodeCoords.z + 0));
-			node->Push(CHILD_OFFSET_BACK_BOTTOM_RIGHT,	m_volume, m_volume->Get(nodeCoords.x + 1, nodeCoords.y + 0, nodeCoords.z + 0));
-			node->Push(CHILD_OFFSET_BACK_TOP_LEFT,		m_volume, m_volume->Get(nodeCoords.x + 0, nodeCoords.y + 1, nodeCoords.z + 0));
-			node->Push(CHILD_OFFSET_BACK_TOP_RIGHT,		m_volume, m_volume->Get(nodeCoords.x + 1, nodeCoords.y + 1, nodeCoords.z + 0));
-			node->Push(CHILD_OFFSET_FRONT_BOTTOM_LEFT,	m_volume, m_volume->Get(nodeCoords.x + 0, nodeCoords.y + 0, nodeCoords.z + 1));
-			node->Push(CHILD_OFFSET_FRONT_BOTTOM_RIGHT, m_volume, m_volume->Get(nodeCoords.x + 1, nodeCoords.y + 0, nodeCoords.z + 1));
-			node->Push(CHILD_OFFSET_FRONT_TOP_LEFT,		m_volume, m_volume->Get(nodeCoords.x + 0, nodeCoords.y + 1, nodeCoords.z + 1));
-			node->Push(CHILD_OFFSET_FRONT_TOP_RIGHT,	m_volume, m_volume->Get(nodeCoords.x + 1, nodeCoords.y + 1, nodeCoords.z + 1));
+			const uint32 stride = GetStride();
+			node->Push(CHILD_OFFSET_BACK_BOTTOM_LEFT,	m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 0) * stride));
+			node->Push(CHILD_OFFSET_BACK_BOTTOM_RIGHT,	m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 0) * stride));
+			node->Push(CHILD_OFFSET_BACK_TOP_LEFT,		m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 0) * stride));
+			node->Push(CHILD_OFFSET_BACK_TOP_RIGHT,		m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 0) * stride));
+			node->Push(CHILD_OFFSET_FRONT_BOTTOM_LEFT,	m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 1) * stride));
+			node->Push(CHILD_OFFSET_FRONT_BOTTOM_RIGHT, m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 1) * stride));
+			node->Push(CHILD_OFFSET_FRONT_TOP_LEFT,		m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 1) * stride));
+			node->Push(CHILD_OFFSET_FRONT_TOP_RIGHT,	m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 1) * stride));
 		}
 		else
 			return;
@@ -196,7 +195,7 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 		node->Push(corner, m_volume, value);
 	}
 
-	// Node is now fully in/out the surface, so remove it
+	// Node is now fully out the surface, so remove it
 	if (node->FlaggedForDeletion())
 	{
 		m_nodes.erase(id);
@@ -207,7 +206,39 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 void OctreeLayer::BuildMesh(MeshBuilderMinimal& builder)
 {
 	for (auto node : m_nodes)
-		node.second->BuildMesh(m_volume->GetIsoLevel(), this, builder);
+		node.second->BuildMesh(m_volume->GetIsoLevel(), builder);
+}
+
+bool OctreeLayer::AttemptNodeFetch(const uint32& id, OctreeLayerNode*& outNode) const
+{
+	// Node in previous layer
+	if (id < m_startIndex)
+	{
+		if (previousLayer)
+			return previousLayer->AttemptNodeFetch(id, outNode);
+		else
+			return false;
+	}
+	// Node in next layer
+	else if (id >= m_startIndex + m_layerResolution*m_layerResolution*m_layerResolution)
+	{
+		if (nextLayer)
+			return nextLayer->AttemptNodeFetch(id, outNode);
+		else
+			return false;
+	}
+	// Node must be in this layer
+	else
+	{
+		auto it = m_nodes.find(id);
+		if (it == m_nodes.end())
+			return false;
+		else
+		{
+			outNode = it->second;
+			return true;
+		}
+	}
 }
 
 
@@ -228,6 +259,9 @@ LayeredVolume::~LayeredVolume()
 
 	if (m_debugMaterial != nullptr)
 		delete m_debugMaterial;
+
+	for (OctreeLayer* layer : m_layers)
+		delete layer;
 }
 
 //
@@ -250,7 +284,7 @@ void LayeredVolume::Update(const float & deltaTime)
 	{
 		//BuildMesh();
 		MeshBuilderMinimal builder;
-		m_layers[3].BuildMesh(builder);
+		m_layers[0]->BuildMesh(builder);
 		//m_layers[m_layers.size() - 1].BuildMesh(builder);
 		builder.BuildMesh(TEST_MESH);
 
@@ -344,6 +378,7 @@ void LayeredVolume::Init(const uvec3 & resolution, const vec3 & scale)
 	const uint32 maxDepth = (uint32)ceil(log2(res - 1)) + 1;
 	const uint32 layerCount = 4; // Check layer count is not greater than maxDepth
 	m_layers.clear();
+	OctreeLayer* previousLayer = nullptr;
 
 	// Create layers
 	for (uint32 i = maxDepth - layerCount; i < maxDepth; ++i)
@@ -353,8 +388,17 @@ void LayeredVolume::Init(const uvec3 & resolution, const vec3 & scale)
 
 		const uint32 layerHeight = j;
 		const uint32 layerDepth = maxDepth - layerHeight;
-		const uint32 layerRes = ((res - 1) / pow(2, layerDepth)) + 1;
-		m_layers.emplace_back(this, layerDepth, layerHeight, layerRes);
+		const uint32 nodeRes = ((res - 1) / pow(2, layerDepth)) + 1;
+
+		OctreeLayer* layer = new OctreeLayer(this, layerDepth, layerHeight, nodeRes);
+
+		// Connect layers
+		layer-> previousLayer = previousLayer;
+		if (previousLayer != nullptr)
+			previousLayer->nextLayer = layer;
+
+		m_layers.push_back(layer);
+		previousLayer = layer;
 	}
 
 }
@@ -364,11 +408,8 @@ void LayeredVolume::Set(uint32 x, uint32 y, uint32 z, float value)
 	m_data[GetIndex(x, y, z)] = value;
 
 	// Notify any layers of any changes
-	bool changes = false;
-	for (OctreeLayer& layer : m_layers)
-		changes |= layer.HandlePush(x, y, z, value);
-
-	TEST_REBUILD = true;
+	for (OctreeLayer* layer : m_layers)
+		TEST_REBUILD |= layer->HandlePush(x, y, z, value);
 }
 
 float LayeredVolume::Get(uint32 x, uint32 y, uint32 z)

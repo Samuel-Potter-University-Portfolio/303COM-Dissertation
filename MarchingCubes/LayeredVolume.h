@@ -10,6 +10,7 @@
 
 class Material;
 class LayeredVolume;
+class OctreeLayer;
 
 
 /**
@@ -21,12 +22,14 @@ class OctreeLayerNode
 	/// Vars
 	///
 private:
+	OctreeLayer* m_layer;
 	const uint32 m_id;
 	uint8 m_caseIndex = 0;
+	uint8 m_childFlags = 0;
 	std::array<float, 8> m_values;
 
 public:
-	OctreeLayerNode(const uint32& id) : m_id(id), m_values({ DEFAULT_VALUE }) {}
+	OctreeLayerNode(const uint32& id, OctreeLayer* layer) : m_id(id), m_values({ DEFAULT_VALUE }), m_layer(layer) {}
 	
 	/**
 	* Notify this node of a change in value
@@ -40,10 +43,9 @@ public:
 	/**
 	* Build the actual mesh for just this node
 	* @param isoLevel		The iso level to build at
-	* @param layer			The layer tha his node is a member of 
 	* @param builder		The builder which will create this mesh
 	*/
-	void BuildMesh(const float& isoLevel, class OctreeLayer* layer, MeshBuilderMinimal& builder);
+	void BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder);
 
 
 	///
@@ -82,7 +84,7 @@ public:
 	*/
 	inline uint32 GetChildID(const uint32& offset) { return m_id * 8 + offset; }
 
-	inline bool FlaggedForDeletion() const { return m_caseIndex == 0; }
+	inline bool FlaggedForDeletion() const { return m_caseIndex == 0 && m_childFlags == 0; }
 
 private:
 	inline uint32 GetIndex(const uint32& x, const uint32& y, const uint32& z) const { return x + 2 * (y + 2 * z); }
@@ -99,15 +101,17 @@ class OctreeLayer
 	///
 private:
 	std::unordered_map<uint32, OctreeLayerNode*> m_nodes;
-	const uint32 m_resolution;
-	const uint32 m_effectiveTotalResolution;
+	const uint32 m_nodeResolution;
+	const uint32 m_layerResolution;
 	const uint32 m_depth;
 	const uint32 m_startIndex;	// The index at which this layer will start it's nodes
 	LayeredVolume* m_volume;
-
+public:
+	OctreeLayer* previousLayer = nullptr;
+	OctreeLayer* nextLayer = nullptr;
 
 public:
-	OctreeLayer(LayeredVolume* volume, const uint32& depth, const uint32& height, const uint32& resolution);
+	OctreeLayer(LayeredVolume* volume, const uint32& depth, const uint32& height, const uint32& nodeRes);
 	~OctreeLayer();
 
 	/**
@@ -140,7 +144,7 @@ public:
 	* @param x,y,z				The local coordinate
 	* @returns The node ID to be used
 	*/
-	inline uint32 GetID(const uint32& x, const uint32& y, const uint32& z) const { return m_startIndex + x + m_effectiveTotalResolution *(y + m_effectiveTotalResolution * z); }
+	inline uint32 GetID(const uint32& x, const uint32& y, const uint32& z) const { return m_startIndex + x + m_layerResolution *(y + m_layerResolution * z); }
 
 	/**
 	* Retreive the local coordinates from an id 
@@ -151,18 +155,27 @@ public:
 		const uint32 localId = id - m_startIndex;
 
 		return uvec3(
-			localId % m_effectiveTotalResolution,
-			(localId / m_effectiveTotalResolution) % m_effectiveTotalResolution,
-			localId / (m_effectiveTotalResolution * m_effectiveTotalResolution)
+			localId % m_layerResolution,
+			(localId / m_layerResolution) % m_layerResolution,
+			localId / (m_layerResolution * m_layerResolution)
 		);
 	}
+
+	/**
+	* Attempt to fetch the node with this id in this layer or above/below
+	* @param id				The id of the node to hunt for
+	* @param outNode		Where to store the node, if found
+	* @returns If the node was sucesfully found
+	*/
+	bool AttemptNodeFetch(const uint32& id, OctreeLayerNode*& outNode) const;
 
 	///
 	/// Getters & Setters
 	///
 public:
-	inline uint32 GetResolution() const { return m_resolution; }
-	inline uint32 GetStride() const { return m_resolution - 1; }
+	inline uint32 GetNodeResolution() const { return m_nodeResolution; }
+	inline uint32 GetLayerResolution() const { return m_layerResolution; }
+	inline uint32 GetStride() const { return m_nodeResolution - 1; }
 	inline uint32 GetDepth() const { return m_depth; }
 	inline uint32 GetStartID() const { return m_startIndex; }
 
@@ -187,7 +200,7 @@ private:
 	/// Volume vars
 	///
 	std::vector<float> m_data;
-	std::vector<OctreeLayer> m_layers; // Declared in order from least depth to greatest
+	std::vector<OctreeLayer*> m_layers; // Declared in order from least depth to greatest
 	float m_isoLevel;
 	vec3 m_scale = vec3(1, 1, 1);
 	uvec3 m_resolution;
