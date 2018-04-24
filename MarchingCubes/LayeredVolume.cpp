@@ -7,6 +7,8 @@
 #include "Logger.h"
 #include "MarchingCubes.h"
 
+#include <unordered_set>
+
 
 ///
 /// Node
@@ -22,35 +24,48 @@ void OctreeLayerNode::Push(const uint32& corner, const LayeredVolume* volume, co
 	// Set bit to 1
 	if (value >= isoLevel)
 	{
-		if		(corner == CHILD_OFFSET_BACK_BOTTOM_LEFT)	m_caseIndex |= 1;
-		else if (corner == CHILD_OFFSET_BACK_BOTTOM_RIGHT)	m_caseIndex |= 2;
-		else if (corner == CHILD_OFFSET_FRONT_BOTTOM_RIGHT) m_caseIndex |= 4;
-		else if (corner == CHILD_OFFSET_FRONT_BOTTOM_LEFT)	m_caseIndex |= 8;
-		else if (corner == CHILD_OFFSET_BACK_TOP_LEFT)		m_caseIndex |= 16;
-		else if (corner == CHILD_OFFSET_BACK_TOP_RIGHT)		m_caseIndex |= 32;
-		else if (corner == CHILD_OFFSET_FRONT_TOP_RIGHT)	m_caseIndex |= 64;
-		else if (corner == CHILD_OFFSET_FRONT_TOP_LEFT)		m_caseIndex |= 128;
+		if		(corner == CHILD_OFFSET_BK_BOT_L) m_caseIndex |= 1;
+		else if (corner == CHILD_OFFSET_BK_BOT_R) m_caseIndex |= 2;
+		else if (corner == CHILD_OFFSET_FR_BOT_R) m_caseIndex |= 4;
+		else if (corner == CHILD_OFFSET_FR_BOT_L) m_caseIndex |= 8;
+		else if (corner == CHILD_OFFSET_BK_TOP_L) m_caseIndex |= 16;
+		else if (corner == CHILD_OFFSET_BK_TOP_R) m_caseIndex |= 32;
+		else if (corner == CHILD_OFFSET_FR_TOP_R) m_caseIndex |= 64;
+		else if (corner == CHILD_OFFSET_FR_TOP_L) m_caseIndex |= 128;
 		else { LOG_ERROR("Invalid corner used in push"); }
 	}
 	// Set bit to 0
 	else
 	{
-		if		(corner == CHILD_OFFSET_BACK_BOTTOM_LEFT)	m_caseIndex &= ~1;
-		else if (corner == CHILD_OFFSET_BACK_BOTTOM_RIGHT)	m_caseIndex &= ~2;
-		else if (corner == CHILD_OFFSET_FRONT_BOTTOM_RIGHT) m_caseIndex &= ~4;
-		else if (corner == CHILD_OFFSET_FRONT_BOTTOM_LEFT)	m_caseIndex &= ~8;
-		else if (corner == CHILD_OFFSET_BACK_TOP_LEFT)		m_caseIndex &= ~16;
-		else if (corner == CHILD_OFFSET_BACK_TOP_RIGHT)		m_caseIndex &= ~32;
-		else if (corner == CHILD_OFFSET_FRONT_TOP_RIGHT)	m_caseIndex &= ~64;
-		else if (corner == CHILD_OFFSET_FRONT_TOP_LEFT)		m_caseIndex &= ~128;
+		if		(corner == CHILD_OFFSET_BK_BOT_L) m_caseIndex &= ~1;
+		else if (corner == CHILD_OFFSET_BK_BOT_R) m_caseIndex &= ~2;
+		else if (corner == CHILD_OFFSET_FR_BOT_R) m_caseIndex &= ~4;
+		else if (corner == CHILD_OFFSET_FR_BOT_L) m_caseIndex &= ~8;
+		else if (corner == CHILD_OFFSET_BK_TOP_L) m_caseIndex &= ~16;
+		else if (corner == CHILD_OFFSET_BK_TOP_R) m_caseIndex &= ~32;
+		else if (corner == CHILD_OFFSET_FR_TOP_R) m_caseIndex &= ~64;
+		else if (corner == CHILD_OFFSET_FR_TOP_L) m_caseIndex &= ~128;
 		else { LOG_ERROR("Invalid corner used in push"); }
 	}
 
 	// TODO - Calculate edges
 }
 
-void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder)
+void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, const uint32& maxDepthOffset)
 {
+	// Merge
+	if (maxDepthOffset != 0 && !IsMergeSafe())
+	{
+		std::array<OctreeLayerNode*, 8> children;
+		FetchChildren(children);
+
+		for (OctreeLayerNode* child : children)
+			if (child)
+				child->BuildMesh(isoLevel, builder, maxDepthOffset - 1);
+		return;
+	}
+
+
 	if (m_caseIndex == 255)
 		return;
 
@@ -58,7 +73,7 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 	const uvec3 layerCoords = m_layer->GetLocalCoords(m_id);
 	const float stridef = stride;
 	const vec3 coordsf = layerCoords;
-	
+
 
 	// Smooth edges based on density
 #define VERT_LERP(x0, y0, z0, x1, y1, z1) MC::VertexLerp(isoLevel, (coordsf + vec3(x0,y0,z0)) * stridef, (coordsf + vec3(x1,y1,z1)) * stridef, m_values[GetIndex(x0, y0, z0)], m_values[GetIndex(x1, y1, z1)])
@@ -89,7 +104,7 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 	if (MC::CaseRequiredEdges[m_caseIndex] & 2048)
 		edges[11] = VERT_LERP(0, 0, 1, 0, 1, 1);
 
-	
+
 
 	// Add triangles for this case
 	int8* caseEdges = MC::Cases[m_caseIndex];
@@ -100,7 +115,7 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 		int8 edge2 = *(caseEdges++);
 
 		vec3 normal = glm::cross(edges[edge1] - edges[edge0], edges[edge2] - edges[edge0]);
-		
+
 		const uint32 a = builder.AddVertex(edges[edge0], normal);
 		const uint32 b = builder.AddVertex(edges[edge1], normal);
 		const uint32 c = builder.AddVertex(edges[edge2], normal);
@@ -108,6 +123,73 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 	}
 }
 
+void OctreeLayerNode::FetchChildren(std::array<OctreeLayerNode*, 8>& outList) const 
+{
+	// Retrieve all children
+	for (uint32 i = 0; i < 8; ++i)
+	{
+		if (!m_layer->AttemptNodeFetch(GetChildID(i), outList[i]))
+			outList[i] = nullptr;
+	}
+}
+
+bool OctreeLayerNode::IsSimpleCase() const 
+{
+	if (m_caseIndex == 0 || m_caseIndex == 255)
+		return true;
+
+	static std::unordered_set<uint8> simpleCases({ 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 19, 23, 25, 27, 29, 31, 32, 34, 35, 38, 39, 43, 46, 47, 48, 49, 50, 51, 54, 55, 57, 59, 63, 64, 68, 70, 71, 76, 77, 78, 79, 96, 98, 99, 100, 102, 103, 108, 110, 111, 112, 113, 114, 115, 116, 118, 119, 127, 128, 136, 137, 139, 140, 141, 142, 143, 144, 145, 147, 152, 153, 155, 156, 157, 159, 176, 177, 178, 179, 184, 185, 187, 191, 192, 196, 198, 200, 201, 204, 205, 206, 207, 208, 209, 212, 216, 217, 220, 221, 223, 224, 226, 228, 230, 232, 236, 238, 239, 240, 241, 242, 243, 244, 246, 247, 248, 249, 251, 252, 253, 254 });
+	return simpleCases.find(m_caseIndex) != simpleCases.end();
+}
+
+bool OctreeLayerNode::IsMergeSafe() const 
+{
+	// Lowest allowed size, so cannot merge
+	if (m_layer->GetNodeResolution() == 2)
+		return true;
+
+
+	// If this isn't a simple case, it cannot be merged
+	if (!IsSimpleCase())
+		return false;
+
+	// Retrieve all children
+	OctreeLayerNode* children[8];
+	for (uint32 i = 0; i < 8; ++i)
+	{
+		if (!m_layer->AttemptNodeFetch(GetChildID(i), children[i]))
+			children[i] = nullptr;
+
+		// Check child is simple case
+		else if (!children[i]->IsSimpleCase())
+			return false;
+	}
+
+
+	// Check for multiple intersections on this nodes edge
+	auto BothIntersect = [children](const uint32& cornerA, const uint32& cornerB, const uint32& edge) 
+	{ 
+		return true; (children[cornerA] && children[cornerA]->GetCaseIndex() & edge) && (children[cornerB] && children[cornerB]->GetCaseIndex() & edge);
+	};
+
+	if (BothIntersect(CHILD_OFFSET_BK_BOT_L, CHILD_OFFSET_BK_BOT_R, 1)) return false;
+	if (BothIntersect(CHILD_OFFSET_BK_BOT_R, CHILD_OFFSET_FR_BOT_R, 2)) return false;
+	if (BothIntersect(CHILD_OFFSET_FR_BOT_L, CHILD_OFFSET_FR_BOT_R, 4)) return false;
+	if (BothIntersect(CHILD_OFFSET_BK_BOT_L, CHILD_OFFSET_FR_BOT_L, 8)) return false;
+
+	if (BothIntersect(CHILD_OFFSET_BK_TOP_L, CHILD_OFFSET_BK_TOP_R, 16)) return false;
+	if (BothIntersect(CHILD_OFFSET_BK_TOP_R, CHILD_OFFSET_FR_TOP_R, 32)) return false;
+	if (BothIntersect(CHILD_OFFSET_FR_TOP_L, CHILD_OFFSET_FR_TOP_R, 64)) return false;
+	if (BothIntersect(CHILD_OFFSET_BK_TOP_L, CHILD_OFFSET_FR_TOP_L, 128)) return false;
+
+	if (BothIntersect(CHILD_OFFSET_BK_BOT_L, CHILD_OFFSET_BK_TOP_L, 256)) return false;
+	if (BothIntersect(CHILD_OFFSET_BK_BOT_R, CHILD_OFFSET_BK_TOP_R, 512)) return false;
+	if (BothIntersect(CHILD_OFFSET_FR_BOT_R, CHILD_OFFSET_FR_TOP_R, 1024)) return false;
+	if (BothIntersect(CHILD_OFFSET_FR_BOT_L, CHILD_OFFSET_FR_TOP_L, 2048)) return false;
+
+
+	return true;
+}
 
 ///
 /// Layer
@@ -171,21 +253,20 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 		{
 			node = new OctreeLayerNode(id, this);
 			m_nodes[id] = node;
-			
+
 			// Init all corner node for this child
 			const uint32 stride = GetStride();
-			node->Push(CHILD_OFFSET_BACK_BOTTOM_LEFT,	m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 0) * stride));
-			node->Push(CHILD_OFFSET_BACK_BOTTOM_RIGHT,	m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 0) * stride));
-			node->Push(CHILD_OFFSET_BACK_TOP_LEFT,		m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 0) * stride));
-			node->Push(CHILD_OFFSET_BACK_TOP_RIGHT,		m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 0) * stride));
-			node->Push(CHILD_OFFSET_FRONT_BOTTOM_LEFT,	m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 1) * stride));
-			node->Push(CHILD_OFFSET_FRONT_BOTTOM_RIGHT, m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 1) * stride));
-			node->Push(CHILD_OFFSET_FRONT_TOP_LEFT,		m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 1) * stride));
-			node->Push(CHILD_OFFSET_FRONT_TOP_RIGHT,	m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 1) * stride));
+			node->Push(CHILD_OFFSET_BK_BOT_L, m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 0) * stride));
+			node->Push(CHILD_OFFSET_BK_BOT_R, m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 0) * stride));
+			node->Push(CHILD_OFFSET_BK_TOP_L, m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 0) * stride));
+			node->Push(CHILD_OFFSET_BK_TOP_R, m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 0) * stride));
+			node->Push(CHILD_OFFSET_FR_BOT_L, m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 1) * stride));
+			node->Push(CHILD_OFFSET_FR_BOT_R, m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 0) * stride, (nodeCoords.z + 1) * stride));
+			node->Push(CHILD_OFFSET_FR_TOP_L, m_volume, m_volume->Get((nodeCoords.x + 0) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 1) * stride));
+			node->Push(CHILD_OFFSET_FR_TOP_R, m_volume, m_volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 1) * stride));
 		}
 		else
 			return;
-
 	}
 	else
 	{
@@ -206,7 +287,7 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 void OctreeLayer::BuildMesh(MeshBuilderMinimal& builder)
 {
 	for (auto node : m_nodes)
-		node.second->BuildMesh(m_volume->GetIsoLevel(), builder);
+		node.second->BuildMesh(m_volume->GetIsoLevel(), builder, 1);
 }
 
 bool OctreeLayer::AttemptNodeFetch(const uint32& id, OctreeLayerNode*& outNode) const
@@ -242,6 +323,7 @@ bool OctreeLayer::AttemptNodeFetch(const uint32& id, OctreeLayerNode*& outNode) 
 }
 
 
+
 ///
 /// Object
 ///
@@ -264,9 +346,9 @@ LayeredVolume::~LayeredVolume()
 		delete layer;
 }
 
-//
-// Object functions
-//
+///
+/// Object functions
+///
 
 void LayeredVolume::Begin()
 {
@@ -285,7 +367,7 @@ void LayeredVolume::Update(const float & deltaTime)
 		//BuildMesh();
 		MeshBuilderMinimal builder;
 		m_layers[0]->BuildMesh(builder);
-		//m_layers[m_layers.size() - 1].BuildMesh(builder);
+		//m_layers[m_layers.size() - 1]->BuildMesh(builder);
 		builder.BuildMesh(TEST_MESH);
 
 		LOG("Build");

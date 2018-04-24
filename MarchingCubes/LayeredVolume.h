@@ -39,13 +39,14 @@ public:
 	*
 	*/
 	void Push(const uint32& corner, const LayeredVolume* volume, const float& value);
-
+	
 	/**
 	* Build the actual mesh for just this node
-	* @param isoLevel		The iso level to build at
-	* @param builder		The builder which will create this mesh
+	* @param isoLevel			The iso level to build at
+	* @param builder			The builder which will create this mesh
+	* @param maxDepthOffset		How much deeped should be considered for meshing
 	*/
-	void BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder);
+	void BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, const uint32& maxDepthOffset);
 
 
 	///
@@ -60,14 +61,6 @@ public:
 	*/
 	inline uint32 GetParentID() const { return m_id / 8; }
 
-#define CHILD_OFFSET_BACK_BOTTOM_LEFT 0
-#define CHILD_OFFSET_BACK_BOTTOM_RIGHT 1
-#define CHILD_OFFSET_BACK_TOP_LEFT 2
-#define CHILD_OFFSET_BACK_TOP_RIGHT 3
-#define CHILD_OFFSET_FRONT_BOTTOM_LEFT 4
-#define CHILD_OFFSET_FRONT_BOTTOM_RIGHT 5
-#define CHILD_OFFSET_FRONT_TOP_LEFT 6
-#define CHILD_OFFSET_FRONT_TOP_RIGHT 7
 	/**
 	* Retreive a children's id for this node
 	* Child Offset Offset:
@@ -82,12 +75,39 @@ public:
 	* @param offset			The child's offset you're trying to receive
 	* @returns The actual id of the child
 	*/
-	inline uint32 GetChildID(const uint32& offset) { return m_id * 8 + offset; }
+	inline uint32 GetChildID(const uint32& offset) const { return m_id * 8 + offset; }
+	#define CHILD_OFFSET_BK_BOT_L 0
+	#define CHILD_OFFSET_BK_BOT_R 1
+	#define CHILD_OFFSET_BK_TOP_L 2
+	#define CHILD_OFFSET_BK_TOP_R 3
+	#define CHILD_OFFSET_FR_BOT_L 4
+	#define CHILD_OFFSET_FR_BOT_R 5
+	#define CHILD_OFFSET_FR_TOP_L 6
+	#define CHILD_OFFSET_FR_TOP_R 7
 
-	inline bool FlaggedForDeletion() const { return m_caseIndex == 0 && m_childFlags == 0; }
+	/**
+	* Retreive all of the children for this node
+	* @param outList		Where to store the children
+	*/
+	void FetchChildren(std::array<OctreeLayerNode*, 8>& outList) const;
+
+	/**
+	* Does the case of this node only contain a single connected face
+	* @returns True if only a single face exist for this case
+	*/
+	bool IsSimpleCase() const;
+
+	/**
+	* Is it safe to merge this nodes children
+	* @returns True if this node can be safely rendered at its own resolution
+	*/
+	bool IsMergeSafe() const;
 
 private:
 	inline uint32 GetIndex(const uint32& x, const uint32& y, const uint32& z) const { return x + 2 * (y + 2 * z); }
+public:
+	inline bool FlaggedForDeletion() const { return m_caseIndex == 0 && m_childFlags == 0; }
+	inline uint8 GetCaseIndex() const { return m_caseIndex; }
 };
 
 
@@ -129,7 +149,6 @@ public:
 	void BuildMesh(MeshBuilderMinimal& builder);
 
 private:
-
 	/**
 	* Push a specific value onto a specific node
 	* @param localCoords		The local coordinates of the value

@@ -79,7 +79,7 @@ void SpectatorController::Begin()
 	
 		// Sphere
 		//*
-		const uint32 radius = 32;
+		const uint32 radius = 64;
 		const uint32 diametre = radius * 2;
 		volume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1));
 
