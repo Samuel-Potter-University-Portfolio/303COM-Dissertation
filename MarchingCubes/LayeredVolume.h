@@ -29,7 +29,13 @@ private:
 	std::array<float, 8> m_values;
 
 public:
-	OctreeLayerNode(const uint32& id, OctreeLayer* layer) : m_id(id), m_values({ DEFAULT_VALUE }), m_layer(layer) {}
+	OctreeLayerNode(const uint32& id, OctreeLayer* layer, const bool& initaliseValues = true);
+
+	/**
+	* Called just before this node is going to be deleted (During runtime)
+	* This won't get called at the end cleanup
+	*/
+	void OnSafeDestroy();
 	
 	/**
 	* Notify this node of a change in value
@@ -59,7 +65,11 @@ public:
 	* Retreive the parent for this node
 	* @returns The id of the parent
 	*/
-	inline uint32 GetParentID() const { return m_id / 8; }
+	inline uint32 GetParentID() const
+	{
+		// FIX
+		return (m_id - 1) / 8;
+	}
 
 	/**
 	* Retreive a children's id for this node
@@ -75,7 +85,7 @@ public:
 	* @param offset			The child's offset you're trying to receive
 	* @returns The actual id of the child
 	*/
-	inline uint32 GetChildID(const uint32& offset) const { return m_id * 8 + offset; }
+	inline uint32 GetChildID(const uint32& offset) const { return m_id * 8 + offset + 1; }
 	#define CHILD_OFFSET_BK_BOT_L 0
 	#define CHILD_OFFSET_BK_BOT_R 1
 	#define CHILD_OFFSET_BK_TOP_L 2
@@ -86,11 +96,21 @@ public:
 	#define CHILD_OFFSET_FR_TOP_R 7
 
 	/**
+	* The offset that this node is at as a child for its parent
+	*/
+	inline uint32 GetOffsetAsChild() const { return m_id - (GetParentID() * 8) - 1; }
+
+	/**
 	* Retreive all of the children for this node
 	* @param outList		Where to store the children
 	*/
 	void FetchChildren(std::array<OctreeLayerNode*, 8>& outList) const;
 
+
+	///
+	/// Merging functions
+	///
+public:
 	/**
 	* Does the case of this node only contain a single connected face
 	* @returns True if only a single face exist for this case
@@ -101,7 +121,40 @@ public:
 	* Is it safe to merge this nodes children
 	* @returns True if this node can be safely rendered at its own resolution
 	*/
-	bool IsMergeSafe() const;
+	bool RequiresHigherDetail() const;
+
+	/**
+	* Count how many intersections exist for this edge
+	* (Will check all children down to leafs)
+	* @param edge			The MC id of the edge
+	* @param max			If the count exceeds this value, the calls will stop
+	* @returns True if there are multiple intersections
+	*/
+	uint32 IntersectionCount(const uint32& edge, const uint32& max = 0) const;
+
+private:
+	/**
+	* Update the child existence flag for the given child
+	* @param offset				The offset of the child
+	* @param exists				Does this child node exist
+	*/
+	inline void SetChildFlag(const uint32& offset, const bool& exists) 
+	{ 
+		const uint32 flag = (1 << offset);
+		if (exists) m_childFlags |= flag;
+		else m_childFlags &= ~flag;
+	}
+
+	/**
+	* Check whether a child exists or not (According to this node)
+	* @param offset				The offset of the child
+	* @returns True if the child exists
+	*/
+	inline bool GetChildFlag(const uint32& offset) const
+	{
+		const uint32 flag = (1 << offset);
+		return (m_childFlags & flag) != 0;
+	}
 
 private:
 	inline uint32 GetIndex(const uint32& x, const uint32& y, const uint32& z) const { return x + 2 * (y + 2 * z); }
@@ -125,6 +178,7 @@ private:
 	const uint32 m_layerResolution;
 	const uint32 m_depth;
 	const uint32 m_startIndex;	// The index at which this layer will start it's nodes
+	const uint32 m_endIndex;	// The index at which this layer will start it's nodes
 	LayeredVolume* m_volume;
 public:
 	OctreeLayer* previousLayer = nullptr;
@@ -163,7 +217,15 @@ public:
 	* @param x,y,z				The local coordinate
 	* @returns The node ID to be used
 	*/
-	inline uint32 GetID(const uint32& x, const uint32& y, const uint32& z) const { return m_startIndex + x + m_layerResolution *(y + m_layerResolution * z); }
+	inline uint32 GetID(const uint32& x, const uint32& y, const uint32& z) const 
+	{ 
+		const uint32 nodeStride = m_layerResolution - 1;
+
+		return m_startIndex + 
+			x % 2 + (x / 2) * 8 +
+			(y % 2) * 2 + (y / 2) * 4 * nodeStride +
+			(z % 2) * 4 + (z / 2) * 2 * nodeStride * nodeStride;
+	}
 
 	/**
 	* Retreive the local coordinates from an id 
@@ -182,11 +244,12 @@ public:
 
 	/**
 	* Attempt to fetch the node with this id in this layer or above/below
-	* @param id				The id of the node to hunt for
-	* @param outNode		Where to store the node, if found
+	* @param id					The id of the node to hunt for
+	* @param outNode			Where to store the node, if found
+	* @param createIfAbsent		If the node is not found (But in a valid layer) should it be created
 	* @returns If the node was sucesfully found
 	*/
-	bool AttemptNodeFetch(const uint32& id, OctreeLayerNode*& outNode) const;
+	bool AttemptNodeFetch(const uint32& id, OctreeLayerNode*& outNode, const bool& createIfAbsent);
 
 	///
 	/// Getters & Setters

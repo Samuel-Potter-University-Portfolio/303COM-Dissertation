@@ -161,6 +161,32 @@ void GenSimpleCases()
 
 int main(int argc, char** argv)
 {
+	const uint32 size = 8;
+	const uint32 halfSize = size / 2;
+	const uint32 quatSize = size / 4;
+
+	const uint32 start = (pow(8, 3) - 1) / 7;
+
+	for (uint32 z = 0; z < size; ++z)
+	for (uint32 y = 0; y < size; ++y)
+		for (uint32 x = 0; x < size; ++x)
+		{
+			//m_startIndex + x + m_layerResolution *(y + m_layerResolution * z);
+			int v = start + x % 2 + (x / 2) * 8 +
+				(y % 2) * 2 + (y / 2) * 4 * size +
+				(z % 2) * 4 + (z / 2) * 2 * size * size;
+
+
+			uint32 o = (v - start);
+			uint32 nx = ((o / 8) % size);
+			uint32 ny = 0;
+			uint32 nz = ((o % 8)) / 4 + (o / (size * size * 2));
+
+			LOG("(%i,%i,%i) => %i => (%i,%i,%i)", x, y, z, v - start, nx, ny, nz);
+		}
+	// 585
+	return 0;
+
 	EngineInit settings;
 	settings.Title = "Marching Cubes";
 	Engine engine(settings);

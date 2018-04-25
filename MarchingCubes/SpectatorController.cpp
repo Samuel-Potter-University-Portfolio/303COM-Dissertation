@@ -7,7 +7,7 @@
 #include "Logger.h"
 
 
-void SpectatorController::Begin() 
+void SpectatorController::Begin()
 {
 	LOG("Controls:");
 	LOG("\tWS: \t\tForward/Back");
@@ -29,15 +29,15 @@ void SpectatorController::Begin()
 	m_mesh = new Mesh;
 	m_mesh->SetVertices(std::vector<vec3>(
 	{
-		/*vec3(-1.0f, -1.0f, -1.0f),
-		vec3(1.0f, -1.0f, -1.0f),
-		vec3(-1.0f, -1.0f, 1.0f),
-		vec3(1.0f, -1.0f, 1.0f),
-
-		vec3(-1.0f, 1.0f, -1.0f),
-		vec3(1.0f, 1.0f, -1.0f),
-		vec3(-1.0f, 1.0f, 1.0f),
-		vec3(1.0f, 1.0f, 1.0f),*/
+		//vec3(-1.0f, -1.0f, -1.0f),
+		//vec3(1.0f, -1.0f, -1.0f),
+		//vec3(-1.0f, -1.0f, 1.0f),
+		//vec3(1.0f, -1.0f, 1.0f),
+		//
+		//vec3(-1.0f, 1.0f, -1.0f),
+		//vec3(1.0f, 1.0f, -1.0f),
+		//vec3(-1.0f, 1.0f, 1.0f),
+		//vec3(1.0f, 1.0f, 1.0f),
 
 		vec3(0.0f, 0.0f, 0.0f),
 		vec3(1.0f, 0.0f, 0.0f),
@@ -79,7 +79,7 @@ void SpectatorController::Begin()
 	
 		// Sphere
 		//*
-		const uint32 radius = 64;
+		const uint32 radius = 8;
 		const uint32 diametre = radius * 2;
 		volume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1));
 
@@ -142,7 +142,7 @@ void SpectatorController::Update(const float& deltaTime)
 
 
 
-		if (mouse->IsButtonPressed(Mouse::Button::MB_MIDDLE))
+		if (mouse->IsButtonPressed(Mouse::Button::MB_MIDDLE) || keyboard->IsKeyPressed(Keyboard::Key::KV_G))
 			mouse->SetGrabbed(!mouse->IsGrabbed());
 
 
@@ -329,8 +329,8 @@ void SpectatorController::Draw(const Window* window, const float& deltaTime)
 		Transform t;
 		t.SetLocation(lookatVoxel.coord);
 		m_material->RenderInstance(&t);
-		t.SetLocation(lookatVoxel.surface);
-		m_material->RenderInstance(&t);
+		//t.SetLocation(lookatVoxel.surface);
+		//m_material->RenderInstance(&t);
 		m_material->Unbind(window, GetLevel());
 	}
 }
