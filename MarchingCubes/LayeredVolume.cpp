@@ -15,7 +15,7 @@
 ///
 
 OctreeLayerNode::OctreeLayerNode(const uint32& id, OctreeLayer* layer, const bool& initaliseValues) :
-	m_id(id), m_values({ DEFAULT_VALUE }), m_layer(layer) 
+	m_id(id), m_values({ DEFAULT_VALUE }), m_layer(layer), m_childFlags(0)
 {
 	if (initaliseValues)
 	{
@@ -95,6 +95,64 @@ void OctreeLayerNode::Push(const uint32& corner, const LayeredVolume* volume, co
 	// TODO - Calculate and cache edges?
 }
 
+
+uint32 OctreeLayerNode::GetOffsetAsChild() const
+{
+	uint32 offset = 0;
+	const uint32 i = m_id - m_layer->GetStartID();
+	const uint32 res = m_layer->GetLayerResolution() - 1;
+
+	if ((i % 2) != 0) offset |= 1;
+	if (((i / (res)) % 2) != 0) offset |= 2;
+	if (((i / (res * res)) % 2) != 0) offset |= 4;
+
+	return offset;
+}
+
+uint32 OctreeLayerNode::GetParentID() const
+{
+	if (!m_layer->previousLayer)
+		return 0;
+
+	// Fetch the id of the Bottom Left Corner this node is contained in
+	const uint32 i = m_id - m_layer->GetStartID();
+	const uint32 thisRes = m_layer->GetLayerResolution() - 1;
+	const uint32 parentRes = thisRes / 2;
+	const uint32 offset = GetOffsetAsChild();
+
+	uint32 n = i;
+	if (offset & 1) n -= 1; // Offset X
+	if (offset & 2) n -= thisRes; // Offset Y
+	if (offset & 4) n -= thisRes * thisRes; // Offset Z
+
+	
+	return m_layer->previousLayer->GetStartID() +
+		(n % thisRes) / 2 +
+		(((n % (thisRes * thisRes)) / thisRes) / 2) * parentRes +
+		(((n % (thisRes * thisRes * thisRes)) / (thisRes * thisRes)) / 2) * parentRes*parentRes;
+}
+
+uint32 OctreeLayerNode::GetChildID(const uint32& offset) const
+{
+	const uint32 i = m_id - m_layer->GetStartID();
+	const uint32 res = m_layer->GetLayerResolution() - 1;
+
+	// Calculate the position of the Back Bottom Left
+	const uint32 childRes = res * 2;
+
+	const uint32 c000 =
+		(i % res) * 2 +
+		((i / res) % res) * 2 * childRes +
+		(i / (res * res)) * 2 * childRes * childRes;
+
+	uint32 cId = c000;
+	if (offset & 1) cId += 1; // Offset X
+	if (offset & 2) cId += childRes; // Offset Y
+	if (offset & 4) cId += childRes * childRes; // Offset Z
+
+	return m_layer->GetEndID() + 1 + cId ;
+}
+
 void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, const uint32& maxDepthOffset)
 {
 	// Merge
@@ -105,29 +163,13 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 
 		std::array<OctreeLayerNode*, 8> children;
 		FetchChildren(children);
-
-
-		uint8 currentFlags = 0;
-		uint32 i = 0;
+		
 		for (OctreeLayerNode* child : children)
 		{
 			if (child)
-			{
 				child->BuildMesh(isoLevel, builder, maxDepthOffset - 1);
-				currentFlags |= (1 << i);
-
-				if (m_values[i] != child->m_values[i])
-				{
-					int n = 0;
-					n++;
-				}
-			}
-			++i;
 		}
-
-		if (currentFlags != m_childFlags)
-			i++;
-
+		
 		return;
 	}
 
@@ -348,9 +390,10 @@ bool OctreeLayer::HandlePush(const uint32& x, const uint32& y, const uint32& z, 
 void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offset, const float& value)
 {
 	uvec3 nodeCoords = uvec3(localCoords.x + offset.x, localCoords.y + offset.y, localCoords.z + offset.z);
+	if ((localCoords.x == 0 && offset.x < 0) || (localCoords.y == 0 && offset.y < 0) || (localCoords.z == 0 && offset.z < 0))
+		return; // Requested coords out of range
+
 	const uint32 id = GetID(nodeCoords.x, nodeCoords.y, nodeCoords.z);
-
-
 
 	// If id is outside of node range of this layer offset has overflowed
 	if (id < m_startIndex || id > m_endIndex)
@@ -559,7 +602,7 @@ void LayeredVolume::Init(const uvec3 & resolution, const vec3 & scale)
 
 	// Allocate number of layers
 	const uint32 maxDepth = (uint32)ceil(log2(res - 1)) + 1;
-	const uint32 layerCount = 2;// 5; // Check layer count is not greater than maxDepth
+	const uint32 layerCount = 4;// 5; // Check layer count is not greater than maxDepth
 	m_layers.clear();
 	OctreeLayer* previousLayer = nullptr;
 

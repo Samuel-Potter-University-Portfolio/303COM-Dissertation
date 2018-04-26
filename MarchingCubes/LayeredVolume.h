@@ -22,11 +22,11 @@ class OctreeLayerNode
 	/// Vars
 	///
 private:
-	OctreeLayer* m_layer;
 	const uint32 m_id;
 	uint8 m_caseIndex = 0;
 	uint8 m_childFlags = 0;
 	std::array<float, 8> m_values;
+	OctreeLayer* m_layer;
 
 public:
 	OctreeLayerNode(const uint32& id, OctreeLayer* layer, const bool& initaliseValues = true);
@@ -54,22 +54,24 @@ public:
 	*/
 	void BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, const uint32& maxDepthOffset);
 
-
 	///
-	/// Getters & Setters
+	/// Tree Funcs
 	///
 public:
-	inline uint32 GetID() const { return m_id; }
+	#define CHILD_OFFSET_BK_BOT_L 0
+	#define CHILD_OFFSET_BK_BOT_R 1
+	#define CHILD_OFFSET_BK_TOP_L 2
+	#define CHILD_OFFSET_BK_TOP_R 3
+	#define CHILD_OFFSET_FR_BOT_L 4
+	#define CHILD_OFFSET_FR_BOT_R 5
+	#define CHILD_OFFSET_FR_TOP_L 6
+	#define CHILD_OFFSET_FR_TOP_R 7
 
 	/**
 	* Retreive the parent for this node
 	* @returns The id of the parent
 	*/
-	inline uint32 GetParentID() const
-	{
-		// FIX
-		return (m_id - 1) / 8;
-	}
+	uint32 GetParentID() const;
 
 	/**
 	* Retreive a children's id for this node
@@ -85,20 +87,12 @@ public:
 	* @param offset			The child's offset you're trying to receive
 	* @returns The actual id of the child
 	*/
-	inline uint32 GetChildID(const uint32& offset) const { return m_id * 8 + offset + 1; }
-	#define CHILD_OFFSET_BK_BOT_L 0
-	#define CHILD_OFFSET_BK_BOT_R 1
-	#define CHILD_OFFSET_BK_TOP_L 2
-	#define CHILD_OFFSET_BK_TOP_R 3
-	#define CHILD_OFFSET_FR_BOT_L 4
-	#define CHILD_OFFSET_FR_BOT_R 5
-	#define CHILD_OFFSET_FR_TOP_L 6
-	#define CHILD_OFFSET_FR_TOP_R 7
+	uint32 GetChildID(const uint32& offset) const;
 
 	/**
 	* The offset that this node is at as a child for its parent
 	*/
-	inline uint32 GetOffsetAsChild() const { return m_id - (GetParentID() * 8) - 1; }
+	uint32 GetOffsetAsChild() const;
 
 	/**
 	* Retreive all of the children for this node
@@ -156,11 +150,16 @@ private:
 		return (m_childFlags & flag) != 0;
 	}
 
-private:
-	inline uint32 GetIndex(const uint32& x, const uint32& y, const uint32& z) const { return x + 2 * (y + 2 * z); }
+	///
+	/// Getters & Setters
+	///
 public:
+	inline uint32 GetID() const { return m_id; }
 	inline bool FlaggedForDeletion() const { return m_caseIndex == 0 && m_childFlags == 0; }
 	inline uint8 GetCaseIndex() const { return m_caseIndex; }
+
+private:
+	inline uint32 GetIndex(const uint32& x, const uint32& y, const uint32& z) const { return x + 2 * (y + 2 * z); }
 };
 
 
@@ -219,12 +218,8 @@ public:
 	*/
 	inline uint32 GetID(const uint32& x, const uint32& y, const uint32& z) const 
 	{ 
-		const uint32 nodeStride = m_layerResolution - 1;
-
-		return m_startIndex + 
-			x % 2 + (x / 2) * 8 +
-			(y % 2) * 2 + (y / 2) * 4 * nodeStride +
-			(z % 2) * 4 + (z / 2) * 2 * nodeStride * nodeStride;
+		const uint32 width = m_layerResolution - 1;
+		return m_startIndex + x + width *(y + width * z);
 	}
 
 	/**
@@ -234,11 +229,12 @@ public:
 	inline uvec3 GetLocalCoords(const uint32& id) const
 	{
 		const uint32 localId = id - m_startIndex;
-
+		const uint32 width = m_layerResolution - 1;
+		
 		return uvec3(
-			localId % m_layerResolution,
-			(localId / m_layerResolution) % m_layerResolution,
-			localId / (m_layerResolution * m_layerResolution)
+			localId % width,
+			(localId / width) % width,
+			localId / (width * width)
 		);
 	}
 
@@ -259,7 +255,9 @@ public:
 	inline uint32 GetLayerResolution() const { return m_layerResolution; }
 	inline uint32 GetStride() const { return m_nodeResolution - 1; }
 	inline uint32 GetDepth() const { return m_depth; }
+
 	inline uint32 GetStartID() const { return m_startIndex; }
+	inline uint32 GetEndID() const { return m_endIndex; }
 
 	inline LayeredVolume* GetVolume() const { return m_volume; }
 };
