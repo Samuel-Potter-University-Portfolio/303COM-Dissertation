@@ -156,7 +156,7 @@ uint32 OctreeLayerNode::GetChildID(const uint32& offset) const
 	return m_layer->GetEndID() + 1 + cId ;
 }
 
-void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, const uint32& maxDepthOffset)
+void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, OctreeLayer* highestLayer, const uint32& maxDepthOffset)
 {
 	// Merge
 	if (maxDepthOffset != 0 && RequiresHigherDetail(maxDepthOffset))
@@ -170,7 +170,7 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 		for (OctreeLayerNode* child : children)
 		{
 			if (child)
-				child->BuildMesh(isoLevel, builder, maxDepthOffset - 1);
+				child->BuildMesh(isoLevel, builder, highestLayer, maxDepthOffset - 1);
 		}
 		
 		return;
@@ -183,12 +183,13 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 	const uint32 stride = m_layer->GetStride();
 	const uvec3 layerCoords = m_layer->GetLocalCoords(m_id);
 	const float stridef = stride;
-	const vec3 coordsf = layerCoords;
 
 
 	// Smooth edges based on density
-#define VERT_LERP(x0, y0, z0, x1, y1, z1) MC::VertexLerp(isoLevel, (coordsf + vec3(x0,y0,z0)) * stridef, (coordsf + vec3(x1,y1,z1)) * stridef, m_values[GetIndex(x0, y0, z0)], m_values[GetIndex(x1, y1, z1)])
+#define VERT_LERP(x0, y0, z0, x1, y1, z1) highestLayer->OverrideEdge(vec3(layerCoords + uvec3(x0,y0,z0)) * stridef, vec3(layerCoords + uvec3(x1,y1,z1)) * stridef, maxDepthOffset, temp) ? temp : MC::VertexLerp(isoLevel, vec3(layerCoords + uvec3(x0,y0,z0)) * stridef, vec3(layerCoords + uvec3(x1,y1,z1)) * stridef, m_values[GetIndex(x0, y0, z0)], m_values[GetIndex(x1, y1, z1)])
+	vec3 temp;
 	vec3 edges[12];
+
 
 	if (MC::CaseRequiredEdges[m_caseIndex] & 1)
 		edges[0] = VERT_LERP(0, 0, 0, 1, 0, 0);
@@ -376,6 +377,10 @@ bool OctreeLayerNode::RequiresHigherDetail(const uint32& maxDepthOffset) const
 	if (IntersectionCount(11, 2) > 1) return true;
 
 
+	// Force more detail incase encased
+	if (m_caseIndex == 0 || m_caseIndex == 255)
+		return true;
+
 	// If the values deviate by too much, merge them
 	return false;
 	//return m_average < m_layer->GetVolume()->GetIsoLevel() && m_stdDeviation > 0.1;
@@ -455,10 +460,352 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 	}
 }
 
-void OctreeLayer::BuildMesh(MeshBuilderMinimal& builder)
+void OctreeLayer::BuildMesh(MeshBuilderMinimal& builder, const uint32& maxDepthOffset)
 {
 	for (auto node : m_nodes)
-		node.second->BuildMesh(m_volume->GetIsoLevel(), builder, 3);
+		node.second->BuildMesh(m_volume->GetIsoLevel(), builder, this, maxDepthOffset);
+}
+
+bool OctreeLayer::ProjectEdgeOntoFace(const uvec3& a, const uvec3& b, const uint32& maxDepthOffset, vec3& overrideOutput, const uvec3& c00, const uvec3& c01, const uvec3& c10, const uvec3& c11) const
+{
+	const float isolevel = m_volume->GetIsoLevel();
+
+	// Fetch values
+	const float v00 = m_volume->Get(c00.x, c00.y, c00.z);
+	const float v01 = m_volume->Get(c01.x, c01.y, c01.z);
+	const float v10 = m_volume->Get(c10.x, c10.y, c10.z);
+	const float v11 = m_volume->Get(c11.x, c11.y, c11.z);
+
+	// Are values inside or isosurface
+	const bool b00 = (v00 >= isolevel);
+	const bool b01 = (v01 >= isolevel);
+	const bool b10 = (v10 >= isolevel);
+	const bool b11 = (v11 >= isolevel);
+
+	// Retrieve edges
+	std::vector<vec3> edges;
+
+	if (b00 != b01)
+		edges.push_back(MC::VertexLerp(isolevel, c00, c01, v00, v01));
+	if (b00 != b10)
+		edges.push_back(MC::VertexLerp(isolevel, c00, c10, v00, v10));
+	if (b11 != b01)
+		edges.push_back(MC::VertexLerp(isolevel, c11, c01, v11, v01));
+	if (b11 != b10)
+		edges.push_back(MC::VertexLerp(isolevel, c11, c10, v11, v10));
+
+
+	// Unexpected number of edges, so check next layer
+	if (edges.size() != 2)
+		return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+
+	// Project point onto line through vector rejection method
+	const vec3& A = edges[0];
+	const vec3& B = edges[1];
+	const vec3& P = MC::VertexLerp(isolevel, a, b, m_volume->Get(a.x, a.y, a.z), m_volume->Get(b.x, b.y, b.z));
+
+	const vec3 AB = B - A;
+	const vec3 AP = P - A;
+	overrideOutput = A + glm::dot(AP, AB) / glm::dot(AB, AB) * AB;
+	return true;
+}
+
+bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& maxDepthOffset, vec3& overrideOutput) const
+{
+	// At lowest depth, so cannot override edge
+	if (maxDepthOffset == 0)
+		return false;
+
+	// Fetch local coord of average cell this is edge is in
+	const uint32 stride = GetStride();
+	const uvec3 local = ((a + b) / 2U) / stride;
+	const uvec3 rem = a % stride;
+	const float isolevel = m_volume->GetIsoLevel();
+
+
+	// Moving on x-axis
+	if (a.x != b.x) // Imply a.y == b.y && a.z == b.z
+	{
+		// Is larger than the current stride, so cannot be overridden
+		if ((a.x < b.x ? b.x - a.x : a.x - b.x) >= stride)
+			return false;
+		
+
+		// Edge is entirely encased in this layer
+		if (rem.y != 0 && rem.z != 0)
+			return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+
+
+		// Edge is inline with edge at this res
+		if (rem.y == 0 && rem.z == 0)
+		{
+			// Check cornering nodes for if they are higher res or not
+			OctreeLayerNode* tempNode;
+			if (
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, -1, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				)
+			{
+				// One of the nodes is being built at this edge, so use the same value for this edge
+				uvec3 layerA = local * stride;
+				uvec3 layerB = (local + uvec3(1, 0, 0)) * stride;
+
+				// TODO - Check there is an edge at this res
+
+				overrideOutput = MC::VertexLerp(isolevel, layerA, layerB, m_volume->Get(layerA.x, layerA.y, layerA.z), m_volume->Get(layerB.x, layerB.y, layerB.z));
+				return true;
+			}
+			// Edge is not locked to this res
+			else
+				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+		}
+
+		// Falls on y-face 
+		else if (rem.y == 0)
+		{
+			// Check nodes for if they are higher res or not
+			OctreeLayerNode* tempNode;
+			if (
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				)
+			{
+				// (X, Z)
+				const uvec3 c00 = (local + uvec3(0, 0, 0)) *stride;
+				const uvec3 c01 = (local + uvec3(1, 0, 0)) *stride;
+				const uvec3 c10 = (local + uvec3(0, 0, 1)) *stride;
+				const uvec3 c11 = (local + uvec3(1, 0, 1)) *stride;
+
+				return ProjectEdgeOntoFace(a, b, maxDepthOffset, overrideOutput, c00, c01, c10, c11);
+			}
+			// Edge is not locked to this res
+			else
+				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+		}
+
+		// Falls on z-face 
+		else if (rem.z == 0)
+		{
+			// Check nodes for if they are higher res or not
+			OctreeLayerNode* tempNode;
+			if (
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				)
+			{
+				// (X, Y)
+				const uvec3 c00 = (local + uvec3(0, 0, 0)) *stride;
+				const uvec3 c01 = (local + uvec3(1, 0, 0)) *stride;
+				const uvec3 c10 = (local + uvec3(0, 1, 0)) *stride;
+				const uvec3 c11 = (local + uvec3(1, 1, 0)) *stride;
+
+				return ProjectEdgeOntoFace(a, b, maxDepthOffset, overrideOutput, c00, c01, c10, c11);
+			}
+			// Edge is not locked to this res
+			else
+				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+		}
+	}
+
+
+	// Moving on y-axis
+	if (a.y != b.y) // Imply a.x == b.x && a.z == b.z
+	{
+		// Is larger than the current stride, so cannot be overridden
+		if ((a.y < b.y ? b.y - a.y : a.y - b.y) >= stride)
+			return false;
+
+
+		// Edge is entirely encased in this layer
+		if (rem.x != 0 && rem.z != 0)
+			return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+
+
+		// Edge is inline with edge at this res
+		if (rem.x == 0 && rem.z == 0)
+		{
+			// Check cornering nodes for if they are higher res or not
+			OctreeLayerNode* tempNode;
+			if (
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				)
+			{
+				// One of the nodes is being built at this edge, so use the same value for this edge
+				uvec3 layerA = local * stride;
+				uvec3 layerB = (local + uvec3(0, 1, 0)) * stride;
+
+				overrideOutput = MC::VertexLerp(m_volume->GetIsoLevel(), layerA, layerB, m_volume->Get(layerA.x, layerA.y, layerA.z), m_volume->Get(layerB.x, layerB.y, layerB.z));
+				return true;
+			}
+			// Edge is not locked to this res
+			else
+				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+		}
+	
+		// Falls on x-face 
+		else if (rem.x == 0)
+		{
+			// Check nodes for if they are higher res or not
+			OctreeLayerNode* tempNode;
+			if (
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				)
+			{
+				// (Y, Z)
+				const uvec3 c00 = (local + uvec3(0, 0, 0)) *stride;
+				const uvec3 c01 = (local + uvec3(0, 1, 0)) *stride;
+				const uvec3 c10 = (local + uvec3(0, 0, 1)) *stride;
+				const uvec3 c11 = (local + uvec3(0, 1, 1)) *stride;
+
+				return ProjectEdgeOntoFace(a, b, maxDepthOffset, overrideOutput, c00, c01, c10, c11);
+			}
+			// Edge is not locked to this res
+			else
+				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+		}
+	
+		// Falls on z-face 
+		else if (rem.z == 0)
+		{
+			// Check nodes for if they are higher res or not
+			OctreeLayerNode* tempNode;
+			if (
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				)
+			{
+				// (Y, X)
+				const uvec3 c00 = (local + uvec3(0, 0, 0)) *stride;
+				const uvec3 c01 = (local + uvec3(0, 1, 0)) *stride;
+				const uvec3 c10 = (local + uvec3(1, 0, 0)) *stride;
+				const uvec3 c11 = (local + uvec3(1, 1, 0)) *stride;
+
+				return ProjectEdgeOntoFace(a, b, maxDepthOffset, overrideOutput, c00, c01, c10, c11);
+			}
+			// Edge is not locked to this res
+			else
+				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+		}
+	}
+
+
+	// Moving on z-axis
+	if (a.z != b.z) // Imply a.x == b.x && a.y == b.y
+	{
+		// Is larger than the current stride, so cannot be overridden
+		if ((a.z < b.z ? b.z - a.z : a.z - b.z) >= stride)
+			return false;
+
+
+		// Edge is entirely encased in this layer
+		if (rem.x != 0 && rem.y != 0)
+			return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+
+
+		// Edge is inline with edge at this res
+		if (rem.x == 0 && rem.y == 0)
+		{
+			// Check cornering nodes for if they are higher res or not
+			OctreeLayerNode* tempNode;
+			if (
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				)
+			{
+				// One of the nodes is being built at this edge, so use the same value for this edge
+				uvec3 layerA = local * stride;
+				uvec3 layerB = (local + uvec3(0, 0, 1)) * stride;
+
+				overrideOutput = MC::VertexLerp(m_volume->GetIsoLevel(), layerA, layerB, m_volume->Get(layerA.x, layerA.y, layerA.z), m_volume->Get(layerB.x, layerB.y, layerB.z));
+				return true;
+			}
+			// Edge is not locked to this res
+			else
+				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+		}
+	
+		// Falls on x-face 
+		else if (rem.x == 0)
+		{
+			// Check nodes for if they are higher res or not
+			OctreeLayerNode* tempNode;
+			if (
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				)
+			{
+				// (Z, Y)
+				const uvec3 c00 = (local + uvec3(0, 0, 0)) *stride;
+				const uvec3 c01 = (local + uvec3(0, 0, 1)) *stride;
+				const uvec3 c10 = (local + uvec3(0, 1, 0)) *stride;
+				const uvec3 c11 = (local + uvec3(0, 1, 1)) *stride;
+
+				return ProjectEdgeOntoFace(a, b, maxDepthOffset, overrideOutput, c00, c01, c10, c11);
+			}
+			// Edge is not locked to this res
+			else
+				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+		}
+	
+		// Falls on y-face 
+		else if (rem.y == 0)
+		{
+			// Check nodes for if they are higher res or not
+			OctreeLayerNode* tempNode;
+			if (
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				)
+			{
+				// (Z, X)
+				const uvec3 c00 = (local + uvec3(0, 0, 0)) *stride;
+				const uvec3 c01 = (local + uvec3(0, 0, 1)) *stride;
+				const uvec3 c10 = (local + uvec3(1, 0, 0)) *stride;
+				const uvec3 c11 = (local + uvec3(1, 0, 1)) *stride;
+
+				return ProjectEdgeOntoFace(a, b, maxDepthOffset, overrideOutput, c00, c01, c10, c11);
+			}
+			// Edge is not locked to this res
+			else
+				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+		}
+	}
+
+
+	// Wasn't overridden at this layer, so pass it to the next
+	return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+}
+
+bool OctreeLayer::AttemptNodeOffsetFetch(const uvec3& localCoords, const ivec3& offset, OctreeLayerNode*& outNode) const
+{
+	uvec3 nodeCoords = uvec3(localCoords.x + offset.x, localCoords.y + offset.y, localCoords.z + offset.z);
+	if ((localCoords.x == 0 && offset.x < 0) || (localCoords.y == 0 && offset.y < 0) || (localCoords.z == 0 && offset.z < 0))
+		return false; // Requested coords out of range
+
+	const uint32 id = GetID(nodeCoords.x, nodeCoords.y, nodeCoords.z);
+
+	// If id is outside of node range of this layer offset has overflowed
+	if (id < m_startIndex || id > m_endIndex)
+		return false;
+
+
+	// Attempt to find the node
+	auto it = m_nodes.find(id);
+	if (it == m_nodes.end())
+		return false;
+	else
+	{
+		outNode = it->second;
+		return true;
+	}
 }
 
 bool OctreeLayer::AttemptNodeFetch(const uint32& id, OctreeLayerNode*& outNode, const bool& createIfAbsent)
@@ -547,7 +894,7 @@ void LayeredVolume::Update(const float & deltaTime)
 	{
 		//BuildMesh();
 		MeshBuilderMinimal builder;
-		m_layers[0]->BuildMesh(builder);
+		m_layers[0]->BuildMesh(builder, 2);
 		//m_layers[m_layers.size() - 1]->BuildMesh(builder);
 		builder.BuildMesh(TEST_MESH);
 
@@ -639,7 +986,7 @@ void LayeredVolume::Init(const uvec3 & resolution, const vec3 & scale)
 
 	// Allocate number of layers
 	const uint32 maxDepth = (uint32)ceil(log2(res - 1)) + 1;
-	const uint32 layerCount = 3;// 5; // Check layer count is not greater than maxDepth
+	const uint32 layerCount = 2;// 5; // Check layer count is not greater than maxDepth
 	m_layers.clear();
 	OctreeLayer* previousLayer = nullptr;
 

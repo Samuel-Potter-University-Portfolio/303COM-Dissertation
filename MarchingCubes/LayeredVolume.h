@@ -53,9 +53,10 @@ public:
 	* Build the actual mesh for just this node
 	* @param isoLevel			The iso level to build at
 	* @param builder			The builder which will create this mesh
+	* @param highestLayer		The highest layer that is being built
 	* @param maxDepthOffset		How much deeped should be considered for meshing
 	*/
-	void BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, const uint32& maxDepthOffset);
+	void BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, OctreeLayer* highestLayer, const uint32& maxDepthOffset);
 
 	///
 	/// Tree Funcs
@@ -208,9 +209,29 @@ public:
 
 	/**
 	* Build a mesh starting at this layer
+	* @param maxDepthOffset		How much deeped should be considered for meshing
 	* @param builder		The builder which will create this mesh
 	*/
-	void BuildMesh(MeshBuilderMinimal& builder);
+	void BuildMesh(MeshBuilderMinimal& builder, const uint32& maxDepthOffset);
+
+	/**
+	* Should the edge connecting these 2 points be overridden (i.e. is a high-res edge meeting a low-res edge)
+	* @param a,b				The desired edge to build (Only 1 axis is expected to change value in this pair)
+	* @param maxDepthOffset		How much deeped should be considered for meshing
+	* @param overrideOutput		Where to store the new edge, if overriden
+	* @returns True if this edge has been overridden
+	*/
+	bool OverrideEdge(const uvec3& a, const uvec3& b, const uint32& maxDepthOffset, vec3& overrideOutput) const;
+private:
+	/**
+	* Project a high-res point onto a low-res edge
+	* @param a,b				The desired edge to build (Only 1 axis is expected to change value in this pair)
+	* @param maxDepthOffset		How much deeped should be considered for meshing
+	* @param overrideOutput		Where to store the new edge, if overriden
+	* @param c00-c11			The corners of the face to project onto
+	* @returns True if this edge has been overridden
+	*/
+	bool ProjectEdgeOntoFace(const uvec3& a, const uvec3& b, const uint32& maxDepthOffset, vec3& overrideOutput, const uvec3& c00, const uvec3& c01, const uvec3& c10, const uvec3& c11) const;
 
 private:
 	/**
@@ -220,6 +241,14 @@ private:
 	* @param value				The actual value to push
 	*/
 	void PushValueOntoNode(const uvec3& localCoords, const ivec3& offset, const float& value);
+
+	/**
+	* Attempt to retrieve a node based on a position
+	* @param localCoords		The local coordinates of the value
+	* @param offset				The offset of the nodes to inform
+	* @param outNode			Where to store the node, if found
+	*/
+	bool AttemptNodeOffsetFetch(const uvec3& localCoords, const ivec3& offset, OctreeLayerNode*& outNode) const;
 
 public:
 	/**
