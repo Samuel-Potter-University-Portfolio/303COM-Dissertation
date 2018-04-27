@@ -3,6 +3,7 @@
 #include "VoxelVolume.h"
 #include "MeshBuilder.h"
 #include "Mesh.h"
+#include "MarchingCubes.h"
 
 #include <unordered_map>
 #include <array>
@@ -168,7 +169,9 @@ private:
 public:
 	inline uint32 GetID() const { return m_id; }
 	inline bool FlaggedForDeletion() const { return m_caseIndex == 0 && m_childFlags == 0; }
+
 	inline uint8 GetCaseIndex() const { return m_caseIndex; }
+	inline bool HasEdge(const uint32& edgeId) const { return (MC::CaseRequiredEdges[m_caseIndex] & edgeId) != 0; }
 
 private:
 	inline uint32 GetIndex(const uint32& x, const uint32& y, const uint32& z) const { return x + 2 * (y + 2 * z); }

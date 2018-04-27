@@ -543,10 +543,10 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 			// Check cornering nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, -1, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && tempNode->HasEdge(1) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && tempNode->HasEdge(16) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && tempNode->HasEdge(4) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, -1, -1), tempNode) && tempNode->HasEdge(64) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// One of the nodes is being built at this edge, so use the same value for this edge
@@ -630,10 +630,10 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 			// Check cornering nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && tempNode->HasEdge(256) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && tempNode->HasEdge(512) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && tempNode->HasEdge(2048) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, -1), tempNode) && tempNode->HasEdge(1024) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// One of the nodes is being built at this edge, so use the same value for this edge
@@ -717,10 +717,10 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 			// Check cornering nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && tempNode->HasEdge(8) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && tempNode->HasEdge(2) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && tempNode->HasEdge(128) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, -1, 0), tempNode) && tempNode->HasEdge(32) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// One of the nodes is being built at this edge, so use the same value for this edge
