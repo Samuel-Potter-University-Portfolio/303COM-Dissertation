@@ -42,6 +42,8 @@ OctreeLayerNode::OctreeLayerNode(const uint32& id, OctreeLayer* layer, const boo
 		if (m_values[CHILD_OFFSET_BK_TOP_R] >= isoLevel) m_caseIndex |= 32;
 		if (m_values[CHILD_OFFSET_FR_TOP_R] >= isoLevel) m_caseIndex |= 64;
 		if (m_values[CHILD_OFFSET_FR_TOP_L] >= isoLevel) m_caseIndex |= 128;
+
+		RecalculateStats();
 	}
 
 	// Update state with parent node
@@ -92,6 +94,7 @@ void OctreeLayerNode::Push(const uint32& corner, const LayeredVolume* volume, co
 		else { LOG_ERROR("Invalid corner used in push"); }
 	}
 
+	RecalculateStats();
 	// TODO - Calculate and cache edges?
 }
 
@@ -156,7 +159,7 @@ uint32 OctreeLayerNode::GetChildID(const uint32& offset) const
 void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, const uint32& maxDepthOffset)
 {
 	// Merge
-	if (maxDepthOffset != 0 && RequiresHigherDetail())
+	if (maxDepthOffset != 0 && RequiresHigherDetail(maxDepthOffset))
 	{
 		if (m_childFlags == 0)
 			return; // Has no children, so just stop meshing here
@@ -241,6 +244,21 @@ void OctreeLayerNode::FetchChildren(std::array<OctreeLayerNode*, 8>& outList) co
 	}
 }
 
+void OctreeLayerNode::RecalculateStats()
+{
+	// Calculate average
+	m_average = 0.0f;
+	for (int i = 0; i < 8; ++i)
+		m_average += m_values[i];
+	m_average /= 8.0f;
+
+	// Calulcate std deviation
+	float sum = 0.0f;
+	for (int i = 0; i < 8; ++i)
+		sum += std::pow(m_values[i] - m_average, 2);
+	m_stdDeviation = std::sqrt(sum / 8.0f);
+}
+
 bool OctreeLayerNode::IsSimpleCase() const 
 {
 	if (m_caseIndex == 0 || m_caseIndex == 255)
@@ -250,18 +268,29 @@ bool OctreeLayerNode::IsSimpleCase() const
 	return simpleCases.find(m_caseIndex) != simpleCases.end();
 }
 
-uint32 OctreeLayerNode::IntersectionCount(const uint32& edge, const uint32& max) const
+uint32 OctreeLayerNode::IntersectionCount(const uint32& edge, const uint32& max, uint32* runningCount) const
 {
 	// Is leaf
-	if (m_layer->GetNodeResolution() == 2)
+	if (m_layer->GetNodeResolution() == 2 || true)
 	{
 		const uint32 edgeFlag = (1 << edge);
-		return (m_caseIndex & edgeFlag) != 0 ? 1 : 0;
+		const uint32 val = (MC::CaseRequiredEdges[m_caseIndex] & edgeFlag) != 0 ? 1 : 0;
+
+		if (runningCount != nullptr)
+		{
+			*runningCount += val;
+			return *runningCount;
+		}
+		else
+			return val;
 	}
 
 	// Count intersection of children on this edge
 	else 
 	{
+		if (max != 0 && runningCount != nullptr && *runningCount >= max)
+			return *runningCount;
+
 		// Gets the ids of the nodes
 		static std::array<uvec2, 12> nodeEdgeLookup
 		{
@@ -285,27 +314,29 @@ uint32 OctreeLayerNode::IntersectionCount(const uint32& edge, const uint32& max)
 		const uvec2& edgeNodes = nodeEdgeLookup[edge];
 		OctreeLayerNode* A;
 		OctreeLayerNode* B;
-		uint32 count = 0;
+
+		uint32 tempVar = 0;
+		uint32& count = (runningCount != nullptr ? *runningCount : tempVar);
 
 		// Add first node intersect count
 		if (GetChildFlag(edgeNodes.x) && m_layer->AttemptNodeFetch(GetChildID(edgeNodes.x), A, false))
-			count += A->IntersectionCount(edge, max);
+			A->IntersectionCount(edge, max, &count);
 
 		if (max != 0 && count >= max)
 			return count;
 
 		// Add second node intersect count
 		if (GetChildFlag(edgeNodes.y) && m_layer->AttemptNodeFetch(GetChildID(edgeNodes.y), B, false))
-			count += B->IntersectionCount(edge, max);
+			B->IntersectionCount(edge, max, &count);
 
 		return count;
 	}
 }
 
-bool OctreeLayerNode::RequiresHigherDetail() const 
+bool OctreeLayerNode::RequiresHigherDetail(const uint32& maxDepthOffset) const
 {
 	// Lowest allowed size, so cannot merge
-	if (m_layer->GetNodeResolution() == 2)
+	if (m_layer->GetNodeResolution() == 2 || maxDepthOffset == 0)
 		return false;
 
 
@@ -324,6 +355,9 @@ bool OctreeLayerNode::RequiresHigherDetail() const
 		// Check child is simple case
 		else if (!children[i]->IsSimpleCase())
 			return true;
+
+		else if (children[i]->RequiresHigherDetail(maxDepthOffset - 1))
+			return true;
 	}
 
 
@@ -341,7 +375,10 @@ bool OctreeLayerNode::RequiresHigherDetail() const
 	if (IntersectionCount(10, 2) > 1) return true;
 	if (IntersectionCount(11, 2) > 1) return true;
 
+
+	// If the values deviate by too much, merge them
 	return false;
+	//return m_average < m_layer->GetVolume()->GetIsoLevel() && m_stdDeviation > 0.1;
 }
 
 ///
@@ -421,7 +458,7 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 void OctreeLayer::BuildMesh(MeshBuilderMinimal& builder)
 {
 	for (auto node : m_nodes)
-		node.second->BuildMesh(m_volume->GetIsoLevel(), builder, 1);
+		node.second->BuildMesh(m_volume->GetIsoLevel(), builder, 3);
 }
 
 bool OctreeLayer::AttemptNodeFetch(const uint32& id, OctreeLayerNode*& outNode, const bool& createIfAbsent)
@@ -602,7 +639,7 @@ void LayeredVolume::Init(const uvec3 & resolution, const vec3 & scale)
 
 	// Allocate number of layers
 	const uint32 maxDepth = (uint32)ceil(log2(res - 1)) + 1;
-	const uint32 layerCount = 4;// 5; // Check layer count is not greater than maxDepth
+	const uint32 layerCount = 3;// 5; // Check layer count is not greater than maxDepth
 	m_layers.clear();
 	OctreeLayer* previousLayer = nullptr;
 

@@ -25,7 +25,10 @@ private:
 	const uint32 m_id;
 	uint8 m_caseIndex = 0;
 	uint8 m_childFlags = 0;
+
 	std::array<float, 8> m_values;
+	float m_average;
+	float m_stdDeviation;
 	OctreeLayer* m_layer;
 
 public:
@@ -113,18 +116,26 @@ public:
 
 	/**
 	* Is it safe to merge this nodes children
+	* @param maxDepthOffset		How much deeped should be considered for meshing
 	* @returns True if this node can be safely rendered at its own resolution
 	*/
-	bool RequiresHigherDetail() const;
+	bool RequiresHigherDetail(const uint32& maxDepthOffset) const;
+
+private:
+	/**
+	* Recalculate stats relevant to this node
+	*/
+	void RecalculateStats();
 
 	/**
 	* Count how many intersections exist for this edge
 	* (Will check all children down to leafs)
 	* @param edge			The MC id of the edge
 	* @param max			If the count exceeds this value, the calls will stop
+	* @param runningCount	Passed from highest level in call stack to prevent calls going on for too long
 	* @returns True if there are multiple intersections
 	*/
-	uint32 IntersectionCount(const uint32& edge, const uint32& max = 0) const;
+	uint32 IntersectionCount(const uint32& edge, const uint32& max = 0, uint32* runningCount = nullptr) const;
 
 private:
 	/**
