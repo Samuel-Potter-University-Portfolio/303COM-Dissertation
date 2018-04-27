@@ -382,8 +382,8 @@ bool OctreeLayerNode::RequiresHigherDetail(const uint32& maxDepthOffset) const
 		return true;
 
 	// If the values deviate by too much, merge them
-	return false;
-	//return m_average < m_layer->GetVolume()->GetIsoLevel() && m_stdDeviation > 0.1;
+	//return false;
+	return m_average < m_layer->GetVolume()->GetIsoLevel() && m_stdDeviation > 0.1;
 }
 
 ///
@@ -498,6 +498,7 @@ bool OctreeLayer::ProjectEdgeOntoFace(const uvec3& a, const uvec3& b, const uint
 	// Unexpected number of edges, so check next layer
 	if (edges.size() != 2)
 		return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
+	
 
 	// Project point onto line through vector rejection method
 	const vec3& A = edges[0];
@@ -614,7 +615,7 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 	if (a.y != b.y) // Imply a.x == b.x && a.z == b.z
 	{
 		// Is larger than the current stride, so cannot be overridden
-		if ((a.y < b.y ? b.y - a.y : a.y - b.y) >= stride)
+		if ((a.y < b.y ? b.y - a.y : a.y- b.y) >= stride)
 			return false;
 
 
@@ -639,14 +640,16 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 				uvec3 layerA = local * stride;
 				uvec3 layerB = (local + uvec3(0, 1, 0)) * stride;
 
-				overrideOutput = MC::VertexLerp(m_volume->GetIsoLevel(), layerA, layerB, m_volume->Get(layerA.x, layerA.y, layerA.z), m_volume->Get(layerB.x, layerB.y, layerB.z));
+				// TODO - Check there is an edge at this res
+
+				overrideOutput = MC::VertexLerp(isolevel, layerA, layerB, m_volume->Get(layerA.x, layerA.y, layerA.z), m_volume->Get(layerB.x, layerB.y, layerB.z));
 				return true;
 			}
 			// Edge is not locked to this res
 			else
 				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
 		}
-	
+
 		// Falls on x-face 
 		else if (rem.x == 0)
 		{
@@ -669,7 +672,7 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 			else
 				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
 		}
-	
+
 		// Falls on z-face 
 		else if (rem.z == 0)
 		{
@@ -716,22 +719,24 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 			if (
 				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
 				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, uvec3(-1, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// One of the nodes is being built at this edge, so use the same value for this edge
 				uvec3 layerA = local * stride;
 				uvec3 layerB = (local + uvec3(0, 0, 1)) * stride;
 
-				overrideOutput = MC::VertexLerp(m_volume->GetIsoLevel(), layerA, layerB, m_volume->Get(layerA.x, layerA.y, layerA.z), m_volume->Get(layerB.x, layerB.y, layerB.z));
+				// TODO - Check there is an edge at this res
+
+				overrideOutput = MC::VertexLerp(isolevel, layerA, layerB, m_volume->Get(layerA.x, layerA.y, layerA.z), m_volume->Get(layerB.x, layerB.y, layerB.z));
 				return true;
 			}
 			// Edge is not locked to this res
 			else
 				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
 		}
-	
+
 		// Falls on x-face 
 		else if (rem.x == 0)
 		{
@@ -754,7 +759,7 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 			else
 				return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
 		}
-	
+
 		// Falls on y-face 
 		else if (rem.y == 0)
 		{
