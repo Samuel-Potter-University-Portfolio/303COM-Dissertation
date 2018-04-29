@@ -262,7 +262,8 @@ int main(int argc, char** argv)
 
 	level->AddObject(new SpectatorController);
 	level->AddObject(new SkyBox);
-	level->AddObject(new LayeredVolume);
+	//level->AddObject(new LayeredVolume);
+	level->AddObject(new DefaultVolume);
 	//level->AddObject(new TestObj);
 	engine.SetLevel(level);
 	engine.LaunchMainLoop();

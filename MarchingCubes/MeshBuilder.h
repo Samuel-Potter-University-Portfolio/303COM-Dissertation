@@ -47,6 +47,12 @@ public:
 	void BuildMesh(class Mesh* target) const;
 
 
+	/**
+	* Simply the mesh by performing edge-collapse
+	* @param count			How many triangles to remove
+	*/
+	void PerformEdgeCollapseReduction(const uint32& count);
+
 	/** Should the resulting mesh be consider for dynamically uploading data*/
 	inline void MarkDynamic() { bIsDynamic = true; }
 };

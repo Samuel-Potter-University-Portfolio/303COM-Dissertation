@@ -3,6 +3,9 @@
 
 #include <unordered_map>
 #include "DefaultMaterial.h"
+#include "MeshBuilder.h"
+#include "Window.h"
+#include "InteractionMaterial.h"
 
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -54,6 +57,7 @@ float DefaultVolume::Get(uint32 x, uint32 y, uint32 z)
 void DefaultVolume::Begin() 
 {
 	m_material = new DefaultMaterial;
+	m_wireMaterial = new InteractionMaterial(vec4(0, 1, 0, 1));
 
 	m_mesh = new Mesh;
 	m_mesh->MarkDynamic();
@@ -73,29 +77,43 @@ void DefaultVolume::Update(const float& deltaTime)
 
 void DefaultVolume::Draw(const class Window* window, const float& deltaTime) 
 {
+	static bool drawWireFrame = false;
+	static bool drawMainObject = true;
+	const Keyboard* keyboard = window->GetKeyboard();
+
+	if (keyboard->IsKeyPressed(Keyboard::Key::KV_T))
+		drawWireFrame = !drawWireFrame;
+	if (keyboard->IsKeyPressed(Keyboard::Key::KV_R))
+		drawMainObject = !drawMainObject;
+
+
 	if (m_mesh != nullptr)
 	{
-		m_material->Bind(window, GetLevel());
-		m_material->PrepareMesh(m_mesh);
-
 		Transform t;
-		// TODO - Support raycasting into scaling
-		//t.SetScale(m_data.GetScale());
-		m_material->RenderInstance(&t);
 
-		m_material->Unbind(window, GetLevel());
+		if (drawMainObject)
+		{
+			m_material->Bind(window, GetLevel());
+			m_material->PrepareMesh(m_mesh);
+			m_material->RenderInstance(&t);
+			m_material->Unbind(window, GetLevel());
+		}
+
+		if (drawWireFrame)
+		{
+			m_wireMaterial->Bind(window, GetLevel());
+			m_wireMaterial->PrepareMesh(m_mesh);
+			m_wireMaterial->RenderInstance(&t);
+			m_wireMaterial->Unbind(window, GetLevel());
+		}
 	}
 }
 
 void DefaultVolume::BuildMesh() 
 {
-	std::unordered_map<vec3, uint32, vec3_KeyFuncs> vertexIndexLookup;
+	MeshBuilderMinimal builder;
 	vec3 edges[12];
-
-	std::vector<vec3> vertices;
-	std::vector<vec3> normals;
-	std::vector<uint32> triangles;
-
+	
 	for (uint32 x = 0; x < GetResolution().x - 1; ++x)
 		for (uint32 y = 0; y < GetResolution().y - 1; ++y)
 			for (uint32 z = 0; z < GetResolution().z - 1; ++z)
@@ -149,61 +167,34 @@ void DefaultVolume::BuildMesh()
 				int8* caseEdges = MC::Cases[caseIndex];
 				while (*caseEdges != -1)
 				{
-					int8 edge = *(caseEdges++);
-					vec3 vert = edges[edge];
+					int8 edge0 = *(caseEdges++);
+					int8 edge1 = *(caseEdges++);
+					int8 edge2 = *(caseEdges++);
+
+					const vec3& A = edges[edge0];
+					const vec3& B = edges[edge1];
+					const vec3& C = edges[edge2];
+
+					// Ignore triangle which is malformed
+					if (A == B || A == C || B == C)
+						continue;
 
 
-					// Reuse old vertex (Lets us do normal smoothing)
-					auto it = vertexIndexLookup.find(vert);
-					if (it != vertexIndexLookup.end())
+					const vec3 normal = glm::cross(B - A, C - A);
+					const float normalLengthSqrd = dot(normal, normal);
+
+					// If normal is 0 it means the edge has been moved so the face is now a line
+					if (normalLengthSqrd != 0.0f && !std::isnan(normalLengthSqrd))
 					{
-						triangles.emplace_back(it->second);
+						const uint32 a = builder.AddVertex(A, normal);
+						const uint32 b = builder.AddVertex(B, normal);
+						const uint32 c = builder.AddVertex(C, normal);
+						builder.AddTriangle(a, b, c);
 					}
-					else
-					{
-						const uint32 index = vertices.size();
-						triangles.emplace_back(index);
-						vertices.emplace_back(vert);
-
-						vertexIndexLookup[vert] = index;
-					}
-
 				}
 			}
 
 
-	// Make normals out of weighted triangles
-	std::unordered_map<uint32, vec3> normalLookup;
-
-	// Generate normals from triss
-	for (uint32 i = 0; i < triangles.size(); i += 3)
-	{
-		uint32 ai = triangles[i];
-		uint32 bi = triangles[i + 1];
-		uint32 ci = triangles[i + 2];
-
-		vec3 a = vertices[ai];
-		vec3 b = vertices[bi];
-		vec3 c = vertices[ci];
-
-
-		// Normals are weighed based on the angle of the edges that connect that corner
-		vec3 crossed = glm::cross(b - a, c - a);
-		vec3 normal = glm::normalize(crossed);
-		float area = crossed.length() * 0.5f;
-
-		normalLookup[ai] += crossed * glm::angle(b - a, c - a);
-		normalLookup[bi] += crossed * glm::angle(a - b, c - b);
-		normalLookup[ci] += crossed * glm::angle(a - c, b - c);
-	}
-
-	// Put normals into vector
-	normals.reserve(vertices.size());
-	for (uint32 i = 0; i < vertices.size(); ++i)
-		normals.emplace_back(normalLookup[i]);
-
-
-	m_mesh->SetVertices(vertices);
-	m_mesh->SetNormals(normals);
-	m_mesh->SetTriangles(triangles);
+	builder.PerformEdgeCollapseReduction(3000);
+	builder.BuildMesh(m_mesh);
 }

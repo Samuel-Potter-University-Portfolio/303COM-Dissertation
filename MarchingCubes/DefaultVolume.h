@@ -18,6 +18,7 @@ private:
 	///
 	Mesh* m_mesh = nullptr;
 	Material* m_material = nullptr;
+	Material* m_wireMaterial = nullptr;
 	bool bRequiresRebuild;
 
 	///
