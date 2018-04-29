@@ -27,7 +27,7 @@ void Engine::LaunchMainLoop()
 	settings.Title = m_settings.Title;
 	settings.Width = 1280;
 	settings.Height = 720;
-	settings.bVerticalSync = true;
+	settings.bVerticalSync = false;
 
 	if (!m_window->Open(settings))
 	{

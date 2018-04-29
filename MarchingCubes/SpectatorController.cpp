@@ -259,8 +259,8 @@ void SpectatorController::Update(const float& deltaTime)
 				rotation.x = 89.0f;
 
 			rotation.y = std::fmodf(rotation.y, 360.0f);
-			if (rotation.y < 0.0f)
-				rotation.y = 360.0f - rotation.y;
+			//if (rotation.y < 0.0f)
+			//	rotation.y = 360.0f - rotation.y;
 
 			m_transform.SetEularRotation(rotation);
 		}
