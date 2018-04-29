@@ -6,9 +6,14 @@
 #include "InteractionMaterial.h"
 #include "Logger.h"
 
+#include <fstream>
+
 
 void SpectatorController::Begin()
 {
+	demoFileName = "DemoFile.bin";
+
+
 	LOG("Controls:");
 	LOG("\tWS: \t\tForward/Back");
 	LOG("\tAD: \t\tLeft/Right");
@@ -73,13 +78,13 @@ void SpectatorController::Begin()
 
 	// Set default volume
 	LOG("Setting up initial volume");
-	IVoxelVolume* volume = GetLevel()->FindObject<IVoxelVolume>();
-	if (volume != nullptr)
+	currentVolume = GetLevel()->FindObject<IVoxelVolume>();
+	if (currentVolume != nullptr)
 	{
-		//volume->LoadFromPvmFile("Resources/Lobster.pvm");
+		//currentVolume->LoadFromPvmFile("Resources/Lobster.pvm");
 	
 		// Destroyed sphere Test
-		//*
+		/*
 		const uint32 radius = 16;
 		const uint32 diametre = radius * 2;
 		volume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1));
@@ -89,14 +94,14 @@ void SpectatorController::Begin()
 		for (int z = 0; z < diametre; ++z)
 			for (int y = 0; y < diametre; ++y)
 				for (int x = 0; x < diametre; ++x)
-					volume->Set(x, y, z, (float)data[i++]);	
+					currentVolume->Set(x, y, z, (float)data[i++]);	
 		//*/
 
 		// Sphere
-		/*
-		const uint32 radius = 64;
+		//*
+		const uint32 radius = 16;
 		const uint32 diametre = radius * 2;
-		volume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1));
+		currentVolume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1));
 
 		for (int x = 0; x < diametre; ++x)
 			for (int y = 0; y < diametre; ++y)
@@ -104,7 +109,7 @@ void SpectatorController::Begin()
 				{
 					float distance = glm::length(vec3(x, y, z) - vec3(radius, radius, radius));
 					float v = 1.0f - glm::clamp(distance / (float)radius, 0.0f, 1.0f);
-					volume->Set(x, y, z, v);
+					currentVolume->Set(x, y, z, v);
 				}
 				//*/
 
@@ -114,9 +119,9 @@ void SpectatorController::Begin()
 		for (int x = 0; x < 64; ++x)
 			for (int z = 0; z < 64; ++z)
 			{
-				volume->Set(x, 63, z, 1.0f);
-				volume->Set(x, 7, z, 0.5f);
-				volume->Set(x, 0, z, 1.0f);
+				currentVolume->Set(x, 63, z, 1.0f);
+				currentVolume->Set(x, 7, z, 0.5f);
+				currentVolume->Set(x, 0, z, 1.0f);
 			}
 			//*/
 	}
@@ -134,10 +139,89 @@ void SpectatorController::Update(const float& deltaTime)
 {
 	const Keyboard* keyboard = GetEngine()->GetWindow()->GetKeyboard();
 	Mouse* mouse = GetEngine()->GetWindow()->GetMouse();
-	IVoxelVolume* volume = GetLevel()->FindObject<IVoxelVolume>();
 
 	const bool running = keyboard->IsKeyDown(Keyboard::Key::KV_LSHIFT);
 	const float speed = (running ? 36.0f : 7.0f) * deltaTime;
+
+
+	// Recording
+	{
+		// Start recording
+		if (!bIsPlayback && keyboard->IsKeyReleased(Keyboard::Key::KV_BACKSPACE))
+		{
+			bIsRecording = !bIsRecording;
+			currentChanges.clear();
+			LOG("Recording set:%i for '%s'", bIsRecording, demoFileName.c_str());
+
+		}
+
+		// Write recording to disk
+		if (bIsRecording)
+		{
+			// Save to file
+			if (currentChanges.size() != 0)
+			{
+				std::ofstream file(demoFileName, std::ofstream::app | std::ofstream::binary);
+				file << currentChanges.size() << '~';
+				void* data = currentChanges.data();
+				file.write(reinterpret_cast<const char*>(data), currentChanges.size() * sizeof(IsoChange));
+				file.close();
+				currentChanges.clear();
+			}
+		}
+	}
+
+	// Playback
+	{
+		// Start playback
+		if (!bIsRecording && !bIsPlayback && keyboard->IsKeyReleased(Keyboard::Key::KV_ENTER))
+		{
+			bIsPlayback = true;
+			playbackIndex = 0;
+			playbackChanges.clear();
+			LOG("Begin playback for '%s'", demoFileName.c_str());
+			
+			// Load file
+			std::ifstream file(demoFileName, std::ofstream::binary);
+			uint32 count;
+
+			// Read all frames in the file
+			while (file.good())
+			{
+				char temp;
+				file >> count >> temp;
+				std::vector<IsoChange> frame;
+				frame.resize(count);
+
+				file.read(reinterpret_cast<char*>(frame.data()), count * sizeof(IsoChange));
+				playbackChanges.push_back(frame);
+			}
+			file.close();
+
+			LOG("Read %i frames", playbackChanges.size());
+		}
+
+		// Play changes
+		if (bIsPlayback)
+		{
+			std::vector<IsoChange>& frame = playbackChanges[playbackIndex++];
+
+
+			for (IsoChange& change : frame)
+				Set(change.coord.x, change.coord.y, change.coord.z, change.value);
+
+
+			// Finished playback
+			if (playbackIndex >= playbackChanges.size())
+			{
+				LOG("Playback finished");
+				playbackChanges.clear();
+				bIsPlayback = false;
+			}
+
+			return; // Don't allow interaction while play back
+		}
+	}
 
 
 	// Movement
@@ -192,8 +276,8 @@ void SpectatorController::Update(const float& deltaTime)
 		{
 			bLookingAtVoxel = false;
 
-			if (volume != nullptr)
-				bLookingAtVoxel = volume->Raycast(Ray(m_transform.GetLocation(), m_transform.GetForward()), lookatVoxel, 1000.0f);
+			if (currentVolume != nullptr)
+				bLookingAtVoxel = currentVolume->Raycast(Ray(m_transform.GetLocation(), m_transform.GetForward()), lookatVoxel, 1000.0f);
 		}
 
 
@@ -237,8 +321,6 @@ void SpectatorController::Update(const float& deltaTime)
 			const bool place = mouse->IsButtonPressed(Mouse::Button::MB_RIGHT);
 			if (destroy || place)
 			{
-				const uvec3 res = volume->GetResolution();
-
 				switch (m_interactionShape)
 				{
 					case InteractionShape::Point:
@@ -249,18 +331,15 @@ void SpectatorController::Update(const float& deltaTime)
 							lookatVoxel.coord.z
 						);
 
-						if (pos.x >= 0 && pos.x < res.x && pos.y >= 0 && pos.y < res.y && pos.z >= 0 && pos.z < res.z)
+						if (destroy)
 						{
-							if (destroy)
-							{
-								float value = volume->Get(pos.x, pos.y, pos.z);
-								volume->Set(pos.x, pos.y, pos.z, 0.0f);
-							}
-							if (place)
-							{
-								float value = volume->Get(pos.x, pos.y, pos.z);
-								volume->Set(lookatVoxel.surface.x, lookatVoxel.surface.y, lookatVoxel.surface.z, 1.0f);
-							}
+							float value = currentVolume->Get(pos.x, pos.y, pos.z);
+							Set(pos.x, pos.y, pos.z, 0.0f);
+						}
+						if (place)
+						{
+							float value = currentVolume->Get(pos.x, pos.y, pos.z);
+							Set(lookatVoxel.surface.x, lookatVoxel.surface.y, lookatVoxel.surface.z, 1.0f);
 						}
 						break;
 					}
@@ -281,18 +360,15 @@ void SpectatorController::Update(const float& deltaTime)
 										lookatVoxel.coord.z + z
 									);
 
-									if (pos.x >= 0 && pos.x < res.x && pos.y >= 0 && pos.y < res.y && pos.z >= 0 && pos.z < res.z)
+									if (destroy)
 									{
-										if (destroy)
-										{
-											float value = volume->Get(pos.x, pos.y, pos.z);
-											volume->Set(pos.x, pos.y, pos.z, glm::min(1.0f, glm::min(length * volume->GetIsoLevel(), value)));
-										}
-										if (place)
-										{
-											float value = volume->Get(pos.x, pos.y, pos.z);
-											volume->Set(pos.x, pos.y, pos.z, glm::max(0.0f, glm::max(1.0f - length, value)));
-										}
+										float value = currentVolume->Get(pos.x, pos.y, pos.z);
+										Set(pos.x, pos.y, pos.z, glm::min(1.0f, glm::min(length * currentVolume->GetIsoLevel(), value)));
+									}
+									if (place)
+									{
+										float value = currentVolume->Get(pos.x, pos.y, pos.z);
+										Set(pos.x, pos.y, pos.z, glm::max(0.0f, glm::max(1.0f - length, value)));
 									}
 								}
 						break;
@@ -312,18 +388,15 @@ void SpectatorController::Update(const float& deltaTime)
 										lookatVoxel.coord.z + z
 									);
 
-									if (pos.x >= 0 && pos.x < res.x && pos.y >= 0 && pos.y < res.y && pos.z >= 0 && pos.z < res.z)
+									if (destroy)
 									{
-										if (destroy)
-										{
-											float value = volume->Get(pos.x, pos.y, pos.z);
-											volume->Set(pos.x, pos.y, pos.z, 0.0f);
-										}
-										if (place)
-										{
-											float value = volume->Get(pos.x, pos.y, pos.z);
-											volume->Set(pos.x, pos.y, pos.z, 1.0f);
-										}
+										float value = currentVolume->Get(pos.x, pos.y, pos.z);
+										Set(pos.x, pos.y, pos.z, 0.0f);
+									}
+									if (place)
+									{
+										float value = currentVolume->Get(pos.x, pos.y, pos.z);
+										Set(pos.x, pos.y, pos.z, 1.0f);
 									}
 								}
 						break;
@@ -349,5 +422,21 @@ void SpectatorController::Draw(const Window* window, const float& deltaTime)
 		//t.SetLocation(lookatVoxel.surface);
 		//m_material->RenderInstance(&t);
 		m_material->Unbind(window, GetLevel());
+	}
+}
+
+void SpectatorController::Set(const uint32& x, const uint32& y, const uint32& z, const float& value)
+{
+	if (!currentVolume)
+		return;
+
+	if (x < currentVolume->GetResolution().x && y < currentVolume->GetResolution().y && z < currentVolume->GetResolution().z)
+	{
+		if (bIsRecording)
+		{
+			IsoChange change{ {x,y,z}, value };
+			currentChanges.push_back(change);
+		}
+		currentVolume->Set(x, y, z, value);
 	}
 }
