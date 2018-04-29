@@ -226,14 +226,24 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 		int8 edge1 = *(caseEdges++);
 		int8 edge2 = *(caseEdges++);
 
-		const vec3 normal = glm::cross(edges[edge1] - edges[edge0], edges[edge2] - edges[edge0]);
+		const vec3& A = edges[edge0];
+		const vec3& B = edges[edge1];
+		const vec3& C = edges[edge2];
+
+		// Ignore triangle which is malformed
+		if (A == B || A == C || B == C)
+			continue;
+
+
+		const vec3 normal = glm::cross(B - A, C - A);
+		const float normalLengthSqrd = dot(normal, normal);
 
 		// If normal is 0 it means the edge has been moved so the face is now a line
-		if (dot(normal, normal) != 0.0f) 
+		if (normalLengthSqrd != 0.0f && !std::isnan(normalLengthSqrd))
 		{
-			const uint32 a = builder.AddVertex(edges[edge0], normal);
-			const uint32 b = builder.AddVertex(edges[edge1], normal);
-			const uint32 c = builder.AddVertex(edges[edge2], normal);
+			const uint32 a = builder.AddVertex(A, normal);
+			const uint32 b = builder.AddVertex(B, normal);
+			const uint32 c = builder.AddVertex(C, normal);
 			builder.AddTriangle(a, b, c);
 		}
 	}
