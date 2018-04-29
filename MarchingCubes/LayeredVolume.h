@@ -252,7 +252,7 @@ private:
 	* @param offset				The offset of the nodes to inform (Expecting the node has this value as one of it's corners)
 	* @param value				The actual value to push
 	*/
-	void PushValueOntoNode(const uvec3& localCoords, const ivec3& offset, const float& value);
+	void PushValueOntoNode(const uvec3& localCoords, const ivec3& offset, float value);
 
 	/**
 	* Attempt to retrieve a node based on a position
