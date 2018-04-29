@@ -52,12 +52,13 @@ public:
 	
 	/**
 	* Build the actual mesh for just this node
-	* @param isoLevel			The iso level to build at
-	* @param builder			The builder which will create this mesh
-	* @param highestLayer		The highest layer that is being built
-	* @param maxDepthOffset		How much deeped should be considered for meshing
+	* @param isoLevel				The iso level to build at
+	* @param builder				The builder which will create this mesh
+	* @param maxDepthOffset			How much deeper should be considered for meshing (In relation to the layer this node is on)
+	* @param highestLayer			The highest layer that is being built
+	* @param highestLayerOffset		How much deeper should be considered for meshing (In relation to the top layer)
 	*/
-	void BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, OctreeLayer* highestLayer, const uint32& maxDepthOffset);
+	void BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, const uint32& maxDepthOffset, OctreeLayer* highestLayer, const uint32& highestLayerOffset);
 
 	///
 	/// Tree Funcs
@@ -123,21 +124,29 @@ public:
 	*/
 	bool RequiresHigherDetail(const uint32& maxDepthOffset) const;
 
+	/**
+	* Does this node have multiple intersections on any of it's edges
+	* (Will check all children down to leafs or when maxDepthOffset == 0)
+	* @param maxDepthOffset		How much deeped should be considered for this check
+	* @returns True if any of it's edges has multiple intersections
+	*/
+	bool HasMultipleIntersections(const uint32& maxDepthOffset) const;
+
+	/**
+	* Count how many interesections exist for this edge
+	* (Will check all children down to leafs or when maxDepthOffset == 0)
+	* @param edge				The MC id of the edge
+	* @param max				If the count exceeds this value, the calls will stop
+	* @param outCount			The running count of edge intersections
+	* @param maxDepthOffset		How much deeped should be considered for this check
+	*/
+	void CountEdgeIntesection(const uint32& edge, const uint32& max, uint32& outCount, const uint32& maxDepthOffset) const;
+
 private:
 	/**
 	* Recalculate stats relevant to this node
 	*/
 	void RecalculateStats();
-
-	/**
-	* Count how many intersections exist for this edge
-	* (Will check all children down to leafs)
-	* @param edge			The MC id of the edge
-	* @param max			If the count exceeds this value, the calls will stop
-	* @param runningCount	Passed from highest level in call stack to prevent calls going on for too long
-	* @returns True if there are multiple intersections
-	*/
-	uint32 IntersectionCount(const uint32& edge, const uint32& max = 0, uint32* runningCount = nullptr) const;
 
 private:
 	/**

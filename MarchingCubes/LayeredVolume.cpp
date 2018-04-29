@@ -156,7 +156,7 @@ uint32 OctreeLayerNode::GetChildID(const uint32& offset) const
 	return m_layer->GetEndID() + 1 + cId ;
 }
 
-void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, OctreeLayer* highestLayer, const uint32& maxDepthOffset)
+void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& builder, const uint32& maxDepthOffset, OctreeLayer* highestLayer, const uint32& highestLayerOffset)
 {
 	// Merge
 	if (maxDepthOffset != 0 && RequiresHigherDetail(maxDepthOffset))
@@ -170,7 +170,7 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 		for (OctreeLayerNode* child : children)
 		{
 			if (child)
-				child->BuildMesh(isoLevel, builder, highestLayer, maxDepthOffset - 1);
+				child->BuildMesh(isoLevel, builder, maxDepthOffset - 1, highestLayer, highestLayerOffset);
 		}
 		
 		return;
@@ -186,7 +186,7 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 
 
 	// Smooth edges based on density
-#define VERT_LERP(x0, y0, z0, x1, y1, z1) highestLayer->OverrideEdge(vec3(layerCoords + uvec3(x0,y0,z0)) * stridef, vec3(layerCoords + uvec3(x1,y1,z1)) * stridef, maxDepthOffset, temp) ? temp : MC::VertexLerp(isoLevel, vec3(layerCoords + uvec3(x0,y0,z0)) * stridef, vec3(layerCoords + uvec3(x1,y1,z1)) * stridef, m_values[GetIndex(x0, y0, z0)], m_values[GetIndex(x1, y1, z1)])
+#define VERT_LERP(x0, y0, z0, x1, y1, z1) highestLayer->OverrideEdge(vec3(layerCoords + uvec3(x0,y0,z0)) * stridef, vec3(layerCoords + uvec3(x1,y1,z1)) * stridef, highestLayerOffset, temp) ? temp : MC::VertexLerp(isoLevel, vec3(layerCoords + uvec3(x0,y0,z0)) * stridef, vec3(layerCoords + uvec3(x1,y1,z1)) * stridef, m_values[GetIndex(x0, y0, z0)], m_values[GetIndex(x1, y1, z1)])
 	vec3 temp;
 	vec3 edges[12];
 
@@ -226,12 +226,16 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 		int8 edge1 = *(caseEdges++);
 		int8 edge2 = *(caseEdges++);
 
-		vec3 normal = glm::cross(edges[edge1] - edges[edge0], edges[edge2] - edges[edge0]);
+		const vec3 normal = glm::cross(edges[edge1] - edges[edge0], edges[edge2] - edges[edge0]);
 
-		const uint32 a = builder.AddVertex(edges[edge0], normal);
-		const uint32 b = builder.AddVertex(edges[edge1], normal);
-		const uint32 c = builder.AddVertex(edges[edge2], normal);
-		builder.AddTriangle(a, b, c);
+		// If normal is 0 it means the edge has been moved so the face is now a line
+		if (dot(normal, normal) != 0.0f) 
+		{
+			const uint32 a = builder.AddVertex(edges[edge0], normal);
+			const uint32 b = builder.AddVertex(edges[edge1], normal);
+			const uint32 c = builder.AddVertex(edges[edge2], normal);
+			builder.AddTriangle(a, b, c);
+		}
 	}
 }
 
@@ -261,37 +265,43 @@ void OctreeLayerNode::RecalculateStats()
 }
 
 bool OctreeLayerNode::IsSimpleCase() const 
-{
-	if (m_caseIndex == 0 || m_caseIndex == 255)
-		return false;
-
-	static std::unordered_set<uint8> simpleCases({ 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 19, 23, 25, 27, 29, 31, 32, 34, 35, 38, 39, 43, 46, 47, 48, 49, 50, 51, 54, 55, 57, 59, 63, 64, 68, 70, 71, 76, 77, 78, 79, 96, 98, 99, 100, 102, 103, 108, 110, 111, 112, 113, 114, 115, 116, 118, 119, 127, 128, 136, 137, 139, 140, 141, 142, 143, 144, 145, 147, 152, 153, 155, 156, 157, 159, 176, 177, 178, 179, 184, 185, 187, 191, 192, 196, 198, 200, 201, 204, 205, 206, 207, 208, 209, 212, 216, 217, 220, 221, 223, 224, 226, 228, 230, 232, 236, 238, 239, 240, 241, 242, 243, 244, 246, 247, 248, 249, 251, 252, 253, 254 });
+{	
+	static std::unordered_set<uint8> simpleCases({ 0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 19, 20, 23, 25, 27, 29, 31, 32, 34, 35, 38, 39, 40, 43, 46, 47, 48, 49, 50, 51, 54, 55, 57, 59, 63, 64, 65, 68, 70, 71, 76, 77, 78, 79, 96, 98, 99, 100, 102, 103, 108, 110, 111, 112, 113, 114, 115, 116, 118, 119, 125, 127, 128, 130, 136, 137, 139, 140, 141, 142, 143, 144, 145, 147, 152, 153, 155, 156, 157, 159, 176, 177, 178, 179, 184, 185, 187, 190, 191, 192, 196, 198, 200, 201, 204, 205, 206, 207, 208, 209, 212, 215, 216, 217, 220, 221, 223, 224, 226, 228, 230, 232, 235, 236, 238, 239, 240, 241, 242, 243, 244, 246, 247, 248, 249, 251, 252, 253, 254, });
 	return simpleCases.find(m_caseIndex) != simpleCases.end();
 }
 
-uint32 OctreeLayerNode::IntersectionCount(const uint32& edge, const uint32& max, uint32* runningCount) const
+bool OctreeLayerNode::HasMultipleIntersections(const uint32& maxDepthOffset) const 
 {
-	// Is leaf
-	if (m_layer->GetNodeResolution() == 2 || true)
+	uint32 count = 0;
+
+	// Check for intersections on all edges
+	for (uint32 i = 0; i < 12; ++i)
+	{
+		count = 0;
+		CountEdgeIntesection(i, 2, count, maxDepthOffset);
+		if (count >= 2) 
+			return true;
+	}
+	
+	return false;
+}
+
+void OctreeLayerNode::CountEdgeIntesection(const uint32& edge, const uint32& max, uint32& outCount, const uint32& maxDepthOffset) const
+{
+	// Reached/Exceeded max value, so don't continue checks
+	if (outCount >= max)
+		return;
+
+	// Reached lowest layer
+	if (m_layer->GetNodeResolution() == 2 || maxDepthOffset == 0)
 	{
 		const uint32 edgeFlag = (1 << edge);
-		const uint32 val = (MC::CaseRequiredEdges[m_caseIndex] & edgeFlag) != 0 ? 1 : 0;
-
-		if (runningCount != nullptr)
-		{
-			*runningCount += val;
-			return *runningCount;
-		}
-		else
-			return val;
+		outCount += (MC::CaseRequiredEdges[m_caseIndex] & edgeFlag) != 0 ? 1 : 0;
 	}
 
-	// Count intersection of children on this edge
+	// At intermediate level, so check further down the tree
 	else 
 	{
-		if (max != 0 && runningCount != nullptr && *runningCount >= max)
-			return *runningCount;
-
 		// Gets the ids of the nodes
 		static std::array<uvec2, 12> nodeEdgeLookup
 		{
@@ -311,31 +321,25 @@ uint32 OctreeLayerNode::IntersectionCount(const uint32& edge, const uint32& max,
 			uvec2(3,7)
 		};
 
-
 		const uvec2& edgeNodes = nodeEdgeLookup[edge];
-		OctreeLayerNode* A;
-		OctreeLayerNode* B;
+		OctreeLayerNode* temp;
 
-		uint32 tempVar = 0;
-		uint32& count = (runningCount != nullptr ? *runningCount : tempVar);
+		// Count interesections at first node
+		if (GetChildFlag(edgeNodes.x) && m_layer->AttemptNodeFetch(GetChildID(edgeNodes.x), temp, false))
+			temp->CountEdgeIntesection(edge, max, outCount, maxDepthOffset - 1);
 
-		// Add first node intersect count
-		if (GetChildFlag(edgeNodes.x) && m_layer->AttemptNodeFetch(GetChildID(edgeNodes.x), A, false))
-			A->IntersectionCount(edge, max, &count);
-
-		if (max != 0 && count >= max)
-			return count;
-
-		// Add second node intersect count
-		if (GetChildFlag(edgeNodes.y) && m_layer->AttemptNodeFetch(GetChildID(edgeNodes.y), B, false))
-			B->IntersectionCount(edge, max, &count);
-
-		return count;
+		// Count intersections at second node
+		if (GetChildFlag(edgeNodes.y) && m_layer->AttemptNodeFetch(GetChildID(edgeNodes.y), temp, false))
+			temp->CountEdgeIntesection(edge, max, outCount, maxDepthOffset - 1);
 	}
 }
 
 bool OctreeLayerNode::RequiresHigherDetail(const uint32& maxDepthOffset) const
 {
+	// Not point doing further checks if there is not children
+	if (m_childFlags == 0)
+		return false;
+
 	// Lowest allowed size, so cannot merge
 	if (m_layer->GetNodeResolution() == 2 || maxDepthOffset == 0)
 		return false;
@@ -356,34 +360,23 @@ bool OctreeLayerNode::RequiresHigherDetail(const uint32& maxDepthOffset) const
 		// Check child is simple case
 		else if (!children[i]->IsSimpleCase())
 			return true;
-
-		else if (children[i]->RequiresHigherDetail(maxDepthOffset - 1))
-			return true;
 	}
+
+	// Check if children require more detail
+	for (OctreeLayerNode* child : children)
+		if (child && child->RequiresHigherDetail(maxDepthOffset - 1))
+			return true;
 
 
 	// Check for multiple intersections on this nodes edge
-	if (IntersectionCount(0, 2) > 1) return true;
-	if (IntersectionCount(1, 2) > 1) return true;
-	if (IntersectionCount(2, 2) > 1) return true;
-	if (IntersectionCount(3, 2) > 1) return true;
-	if (IntersectionCount(4, 2) > 1) return true;
-	if (IntersectionCount(5, 2) > 1) return true;
-	if (IntersectionCount(6, 2) > 1) return true;
-	if (IntersectionCount(7, 2) > 1) return true;
-	if (IntersectionCount(8, 2) > 1) return true;
-	if (IntersectionCount(9, 2) > 1) return true;
-	if (IntersectionCount(10, 2) > 1) return true;
-	if (IntersectionCount(11, 2) > 1) return true;
-
-
-	// Force more detail incase encased
-	if (m_caseIndex == 0 || m_caseIndex == 255)
+	if (HasMultipleIntersections(maxDepthOffset))
 		return true;
 
+
+	// TODO - Check for multi
 	// If the values deviate by too much, merge them
-	//return false;
-	return m_average < m_layer->GetVolume()->GetIsoLevel() && m_stdDeviation > 0.1;
+	return false;
+	//return m_average < m_layer->GetVolume()->GetIsoLevel() && m_stdDeviation > 0.1;
 }
 
 ///
@@ -463,7 +456,7 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 void OctreeLayer::BuildMesh(MeshBuilderMinimal& builder, const uint32& maxDepthOffset)
 {
 	for (auto node : m_nodes)
-		node.second->BuildMesh(m_volume->GetIsoLevel(), builder, this, maxDepthOffset);
+		node.second->BuildMesh(m_volume->GetIsoLevel(), builder, maxDepthOffset, this, maxDepthOffset);
 }
 
 bool OctreeLayer::ProjectEdgeOntoFace(const uvec3& a, const uvec3& b, const uint32& maxDepthOffset, vec3& overrideOutput, const uvec3& c00, const uvec3& c01, const uvec3& c10, const uvec3& c11) const
@@ -520,8 +513,10 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 	// Fetch local coord of average cell this is edge is in
 	const uint32 stride = GetStride();
 	const uvec3 local = ((a + b) / 2U) / stride;
-	const uvec3 rem = a % stride;
 	const float isolevel = m_volume->GetIsoLevel();
+
+	const uvec3 remA = a % stride;
+	const uvec3 remB = b % stride;
 
 
 	// Moving on x-axis
@@ -533,20 +528,20 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 		
 
 		// Edge is entirely encased in this layer
-		if (rem.y != 0 && rem.z != 0)
+		if (remA.y != 0 && remA.z != 0)
 			return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
 
 
 		// Edge is inline with edge at this res
-		if (rem.y == 0 && rem.z == 0)
+		if (remA.y == 0 && remA.z == 0)
 		{
 			// Check cornering nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && tempNode->HasEdge(1) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && tempNode->HasEdge(16) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && tempNode->HasEdge(4) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, -1, -1), tempNode) && tempNode->HasEdge(64) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, 0), tempNode) && tempNode->HasEdge(1) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(0, -1, 0), tempNode) && tempNode->HasEdge(16) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, -1), tempNode) && tempNode->HasEdge(4) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(0, -1, -1), tempNode) && tempNode->HasEdge(64) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// One of the nodes is being built at this edge, so use the same value for this edge
@@ -564,13 +559,13 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 		}
 
 		// Falls on y-face 
-		else if (rem.y == 0)
+		else if (remA.y == 0)
 		{
 			// Check nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// (X, Z)
@@ -587,13 +582,13 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 		}
 
 		// Falls on z-face 
-		else if (rem.z == 0)
+		else if (remA.z == 0)
 		{
 			// Check nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// (X, Y)
@@ -620,20 +615,20 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 
 
 		// Edge is entirely encased in this layer
-		if (rem.x != 0 && rem.z != 0)
+		if (remA.x != 0 && remA.z != 0)
 			return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
 
 
 		// Edge is inline with edge at this res
-		if (rem.x == 0 && rem.z == 0)
+		if (remA.x == 0 && remA.z == 0)
 		{
 			// Check cornering nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && tempNode->HasEdge(256) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && tempNode->HasEdge(512) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && tempNode->HasEdge(2048) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, -1), tempNode) && tempNode->HasEdge(1024) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, 0), tempNode) && tempNode->HasEdge(256) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(-1, 0, 0), tempNode) && tempNode->HasEdge(512) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, -1), tempNode) && tempNode->HasEdge(2048) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(-1, 0, -1), tempNode) && tempNode->HasEdge(1024) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// One of the nodes is being built at this edge, so use the same value for this edge
@@ -651,13 +646,13 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 		}
 
 		// Falls on x-face 
-		else if (rem.x == 0)
+		else if (remA.x == 0)
 		{
 			// Check nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// (Y, Z)
@@ -674,13 +669,13 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 		}
 
 		// Falls on z-face 
-		else if (rem.z == 0)
+		else if (remA.z == 0)
 		{
 			// Check nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, -1), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// (Y, X)
@@ -707,20 +702,20 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 
 
 		// Edge is entirely encased in this layer
-		if (rem.x != 0 && rem.y != 0)
+		if (remA.x != 0 && remA.y != 0)
 			return nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false;
 
 
 		// Edge is inline with edge at this res
-		if (rem.x == 0 && rem.y == 0)
+		if (remA.x == 0 && remA.y == 0)
 		{
 			// Check cornering nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && tempNode->HasEdge(8) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && tempNode->HasEdge(2) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && tempNode->HasEdge(128) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, -1, 0), tempNode) && tempNode->HasEdge(32) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, 0), tempNode) && tempNode->HasEdge(8) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(-1, 0, 0), tempNode) && tempNode->HasEdge(2) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(0, -1, 0), tempNode) && tempNode->HasEdge(128) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(-1, -1, 0), tempNode) && tempNode->HasEdge(32) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// One of the nodes is being built at this edge, so use the same value for this edge
@@ -738,13 +733,13 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 		}
 
 		// Falls on x-face 
-		else if (rem.x == 0)
+		else if (remA.x == 0)
 		{
 			// Check nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(-1, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// (Z, Y)
@@ -761,13 +756,13 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 		}
 
 		// Falls on y-face 
-		else if (rem.y == 0)
+		else if (remA.y == 0)
 		{
 			// Check nodes for if they are higher res or not
 			OctreeLayerNode* tempNode;
 			if (
-				(AttemptNodeOffsetFetch(local, uvec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
-				(AttemptNodeOffsetFetch(local, uvec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
+				(AttemptNodeOffsetFetch(local, ivec3(0, 0, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset)) ||
+				(AttemptNodeOffsetFetch(local, ivec3(0, -1, 0), tempNode) && !tempNode->RequiresHigherDetail(maxDepthOffset))
 				)
 			{
 				// (Z, X)
@@ -899,7 +894,7 @@ void LayeredVolume::Update(const float & deltaTime)
 	{
 		//BuildMesh();
 		MeshBuilderMinimal builder;
-		m_layers[0]->BuildMesh(builder, 2);
+		m_layers[0]->BuildMesh(builder, 1);
 		//m_layers[m_layers.size() - 1]->BuildMesh(builder);
 		builder.BuildMesh(TEST_MESH);
 
@@ -949,19 +944,14 @@ void LayeredVolume::Draw(const Window * window, const float & deltaTime)
 		m_debugMaterial->RenderInstance(&t);
 		m_debugMaterial->Unbind(window, GetLevel());
 	}
+	*/
 
 	// Completely rebuild mesh
 	if (keyboard->IsKeyPressed(Keyboard::Key::KV_N))
 	{
-		for (auto& pair : m_nodeLevel)
-			pair.second.isStale = true;
-		for (auto& pair : m_nodedebugLevel)
-			pair.second.isStale = true;
-
-		BuildMesh();
+		TEST_REBUILD = true;
 		LOG("Done");
 	}
-	*/
 }
 
 
