@@ -4,6 +4,7 @@
 #include "Mesh.h"
 #include "Material.h"
 #include "VoxelVolume.h"
+#include "MeshBuilder.h"
 
 
 
@@ -16,10 +17,12 @@ private:
 	///
 	/// Rendering Vars
 	///
-	Mesh* m_mesh = nullptr;
 	Material* m_material = nullptr;
 	Material* m_wireMaterial = nullptr;
 	bool bRequiresRebuild;
+
+	std::vector<Mesh*> m_meshes;
+	uint32 currentLod;
 
 	///
 	/// Volume Vars
@@ -43,7 +46,7 @@ public:
 
 
 	// TODO - MAKE PROPER
-	void BuildMesh();
+	void BuildMesh(MeshBuilderMinimal& builder);
 
 
 	///
@@ -51,6 +54,7 @@ public:
 	///
 public:
 	virtual void Init(const uvec3& resolution, const vec3& scale) override;
+	virtual VoxelBuildResults Rebuild(const std::vector<VoxelDelta>& deltas, VoxelBuildResults* recreation) override;
 
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override;
 	virtual float Get(uint32 x, uint32 y, uint32 z) override;

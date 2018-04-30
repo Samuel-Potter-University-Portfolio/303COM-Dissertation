@@ -206,6 +206,7 @@ private:
 public:
 	OctreeLayer* previousLayer = nullptr;
 	OctreeLayer* nextLayer = nullptr;
+	bool rebuildFlag = false;
 
 public:
 	OctreeLayer(LayeredVolume* volume, const uint32& depth, const uint32& height, const uint32& nodeRes);
@@ -223,8 +224,9 @@ public:
 	* Build a mesh starting at this layer
 	* @param maxDepthOffset		How much deeped should be considered for meshing
 	* @param builder		The builder which will create this mesh
+	* @returns True if the mesh has changed
 	*/
-	void BuildMesh(MeshBuilderMinimal& builder, const uint32& maxDepthOffset);
+	bool BuildMesh(MeshBuilderMinimal& builder, const uint32& maxDepthOffset);
 
 	/**
 	* Should the edge connecting these 2 points be overridden (i.e. is a high-res edge meeting a low-res edge)
@@ -251,8 +253,9 @@ private:
 	* @param localCoords		The local coordinates of the value
 	* @param offset				The offset of the nodes to inform (Expecting the node has this value as one of it's corners)
 	* @param value				The actual value to push
+	* @returns If value was pushed on succesfully
 	*/
-	void PushValueOntoNode(const uvec3& localCoords, const ivec3& offset, float value);
+	bool PushValueOntoNode(const uvec3& localCoords, const ivec3& offset, float value);
 
 	/**
 	* Attempt to retrieve a node based on a position
@@ -328,6 +331,10 @@ private:
 	Material* m_wireMaterial = nullptr;
 	Material* m_debugMaterial = nullptr;
 
+	std::vector<Mesh*> m_meshes;
+	uint32 currentLod;
+	uint32 lodDepth = 1;
+
 	///
 	/// Volume vars
 	///
@@ -338,7 +345,6 @@ private:
 	uvec3 m_resolution;
 	uint32 m_octreeRes;
 
-	class Mesh* TEST_MESH;
 	bool TEST_REBUILD;
 
 public:
@@ -359,6 +365,7 @@ public:
 	///
 public:
 	virtual void Init(const uvec3& resolution, const vec3& scale) override;
+	virtual VoxelBuildResults Rebuild(const std::vector<VoxelDelta>& deltas, VoxelBuildResults* recreation) override;
 
 	virtual void Set(uint32 x, uint32 y, uint32 z, float value) override;
 	virtual float Get(uint32 x, uint32 y, uint32 z) override; // TODO - FIX THAT GET

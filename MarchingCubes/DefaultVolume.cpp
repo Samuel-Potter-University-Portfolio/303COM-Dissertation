@@ -6,6 +6,7 @@
 #include "MeshBuilder.h"
 #include "Window.h"
 #include "InteractionMaterial.h"
+#include "Logger.h"
 
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -19,10 +20,11 @@ DefaultVolume::DefaultVolume()
 
 DefaultVolume::~DefaultVolume()
 {
+	for (Mesh* mesh : m_meshes)
+		delete mesh;
+
 	if (m_data != nullptr)
 		delete[] m_data;
-	if (m_mesh != nullptr)
-		delete m_mesh;
 	if (m_material != nullptr)
 		delete m_material;
 }
@@ -36,6 +38,8 @@ void DefaultVolume::Init(const uvec3& resolution, const vec3& scale)
 	m_data = new float[resolution.x * resolution.y * resolution.z]{ DEFAULT_VALUE };
 	m_resolution = resolution;
 	m_scale = scale;
+
+	m_meshes.push_back(new Mesh);
 }
 
 void DefaultVolume::Set(uint32 x, uint32 y, uint32 z, float value) 
@@ -58,11 +62,6 @@ void DefaultVolume::Begin()
 {
 	m_material = new DefaultMaterial;
 	m_wireMaterial = new InteractionMaterial(vec4(0, 1, 0, 1));
-
-	m_mesh = new Mesh;
-	m_mesh->MarkDynamic();
-
-	BuildMesh();
 }
 
 void DefaultVolume::Update(const float& deltaTime) 
@@ -70,7 +69,10 @@ void DefaultVolume::Update(const float& deltaTime)
 	// Rebuild mesh if it needs it
 	if (bRequiresRebuild)
 	{
-		BuildMesh();
+		MeshBuilderMinimal builder;
+		builder.MarkDynamic();
+		BuildMesh(builder);
+		builder.BuildMesh(m_meshes[currentLod]);
 		bRequiresRebuild = false;
 	}
 }
@@ -87,14 +89,14 @@ void DefaultVolume::Draw(const class Window* window, const float& deltaTime)
 		drawMainObject = !drawMainObject;
 
 
-	if (m_mesh != nullptr)
+	if (m_meshes[currentLod] != nullptr)
 	{
 		Transform t;
 
 		if (drawMainObject)
 		{
 			m_material->Bind(window, GetLevel());
-			m_material->PrepareMesh(m_mesh);
+			m_material->PrepareMesh(m_meshes[currentLod]);
 			m_material->RenderInstance(&t);
 			m_material->Unbind(window, GetLevel());
 		}
@@ -102,17 +104,24 @@ void DefaultVolume::Draw(const class Window* window, const float& deltaTime)
 		if (drawWireFrame)
 		{
 			m_wireMaterial->Bind(window, GetLevel());
-			m_wireMaterial->PrepareMesh(m_mesh);
+			m_wireMaterial->PrepareMesh(m_meshes[currentLod]);
 			m_wireMaterial->RenderInstance(&t);
 			m_wireMaterial->Unbind(window, GetLevel());
 		}
 	}
+
+	if (keyboard->IsKeyPressed(Keyboard::Key::KV_U))
+	{
+		currentLod++;
+		if (currentLod >= m_meshes.size())
+			currentLod = 0;
+
+		LOG("Level %i", currentLod);
+	}
 }
 
-#include "Logger.h"
-void DefaultVolume::BuildMesh() 
+void DefaultVolume::BuildMesh(MeshBuilderMinimal& builder)
 {
-	MeshBuilderMinimal builder;
 	vec3 edges[12];
 	
 	for (uint32 x = 0; x < GetResolution().x - 1; ++x)
@@ -195,7 +204,58 @@ void DefaultVolume::BuildMesh()
 				}
 			}
 
+}
 
-	//builder.PerformEdgeCollapseReduction(10000);
-	builder.BuildMesh(m_mesh);
+#include <chrono>
+using namespace std::chrono;
+VoxelBuildResults DefaultVolume::Rebuild(const std::vector<VoxelDelta>& deltas, VoxelBuildResults* recreation) 
+{
+	if (recreation)
+	{
+		// Create LOD meshes
+		for (uint32 i = m_meshes.size(); i < recreation->buildTime.size(); ++i)
+			m_meshes.push_back(new Mesh);
+	}
+
+
+	// recreation ignored for LayeredVolume
+	VoxelBuildResults results;
+
+	results.buildTime.resize(m_meshes.size());
+	results.tricount.resize(m_meshes.size());
+
+
+	int64 startTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	int64 endTime;
+
+	// Insert values
+	for (const VoxelDelta& delta : deltas)
+		m_data[GetIndex(delta.coord.x, delta.coord.y, delta.coord.z)] = delta.value;
+
+	endTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	results.insertTime = endTime - startTime;
+
+
+	// Rebuild meshes
+	int64 buildStartTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	MeshBuilderMinimal builder;
+	builder.MarkDynamic();
+	BuildMesh(builder);
+
+	for (uint32 i = 0; i < m_meshes.size(); ++i)
+	{
+		if(recreation && builder.GetIndexCount() > recreation->tricount[recreation->tricount.size() - 1 - i])
+			builder.PerformEdgeCollapseReduction(builder.GetIndexCount() - recreation->tricount[recreation->tricount.size() - 1 - i]);
+		builder.BuildMesh(m_meshes[i]);
+
+		endTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+		results.buildTime[i] = endTime - buildStartTime;
+		results.tricount[i] = m_meshes[i]->GetDrawCount();
+	}
+
+
+	// Total time
+	endTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	results.totalTime = endTime - startTime;
+	return results;
 }

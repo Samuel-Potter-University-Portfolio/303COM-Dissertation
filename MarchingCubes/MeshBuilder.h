@@ -20,6 +20,8 @@ private:
 	std::unordered_map<vec3, uint32, vec3_KeyFuncs, vec3_KeyFuncs> m_indexLookup;
 
 public:
+	MeshBuilderMinimal();
+	MeshBuilderMinimal(const MeshBuilderMinimal& other);
 
 	/**
 	* Add this vertex to the recipe

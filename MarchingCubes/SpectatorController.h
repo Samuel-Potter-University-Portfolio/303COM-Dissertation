@@ -12,10 +12,17 @@ enum class InteractionShape
 	Unknown
 };
 
-struct IsoChange 
+
+struct VoxelFrame 
 {
-	uvec3 coord;
-	float value;
+	std::vector<VoxelDelta> deltas;
+	VoxelBuildResults results;
+
+	inline void clear() 
+	{
+		deltas.clear();
+		results.clear();
+	}
 };
 
 
@@ -41,12 +48,14 @@ private:
 	///
 	/// Serialization
 	///
-	bool bIsRecording;
-	bool bIsPlayback;
-	std::vector<IsoChange> currentChanges;
 	std::string demoFileName;
+
+	bool bIsRecording;
+	VoxelFrame currentFrame;
+
+	bool bIsPlayback;
 	uint32 playbackIndex;
-	std::vector<std::vector<IsoChange>> playbackChanges;
+	std::vector<VoxelFrame> playbackFrames;
 
 public:
 	virtual ~SpectatorController();

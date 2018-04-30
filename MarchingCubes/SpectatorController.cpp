@@ -20,7 +20,7 @@ void SpectatorController::Begin()
 	LOG("\tSpace: \t\tUp");
 	LOG("\tLCtrl: \t\tDown");
 	LOG("\tMouse: \t\tLook");
-	LOG("\tLShift: \t\tSprint");
+	LOG("\tLShift: \tSprint");
 	LOG("\tMMB: \t\tToggle grab mouse");
 	LOG("\tLMB: \t\tPlace volume");
 	LOG("\tRMB: \t\tDestroy volume");
@@ -150,7 +150,7 @@ void SpectatorController::Update(const float& deltaTime)
 		if (!bIsPlayback && keyboard->IsKeyReleased(Keyboard::Key::KV_BACKSPACE))
 		{
 			bIsRecording = !bIsRecording;
-			currentChanges.clear();
+			currentFrame.clear();
 			LOG("Recording set:%i for '%s'", bIsRecording, demoFileName.c_str());
 
 		}
@@ -158,15 +158,45 @@ void SpectatorController::Update(const float& deltaTime)
 		// Write recording to disk
 		if (bIsRecording)
 		{
-			// Save to file
-			if (currentChanges.size() != 0)
+			// Execute changes
+			if (currentFrame.deltas.size() != 0)
 			{
+				// Perform changes
+				currentFrame.results = currentVolume->Rebuild(currentFrame.deltas, nullptr);
+
+				// Save to recording file
 				std::ofstream file(demoFileName, std::ofstream::app | std::ofstream::binary);
-				file << currentChanges.size() << '~';
-				void* data = currentChanges.data();
-				file.write(reinterpret_cast<const char*>(data), currentChanges.size() * sizeof(IsoChange));
+
+				// Record deltas
+				{
+					uint32 count = currentFrame.deltas.size();
+					file.write(reinterpret_cast<const char*>(&count), sizeof(uint32));
+
+					const void* data = currentFrame.deltas.data();
+					file.write(reinterpret_cast<const char*>(currentFrame.deltas.data()), currentFrame.deltas.size() * sizeof(VoxelDelta));
+				}
+
+				// Record results
+				{
+					const void* data;
+
+					data = &currentFrame.results.insertTime;
+					file.write(reinterpret_cast<const char*>(data), sizeof(int64));
+					data = &currentFrame.results.totalTime;
+					file.write(reinterpret_cast<const char*>(data), sizeof(int64));
+
+					uint32 count = currentFrame.results.buildTime.size();
+					file.write(reinterpret_cast<const char*>(&count), sizeof(uint32));
+
+					data = currentFrame.results.buildTime.data();
+					file.write(reinterpret_cast<const char*>(data), count * sizeof(int64));
+
+					data = currentFrame.results.tricount.data();
+					file.write(reinterpret_cast<const char*>(data), count * sizeof(uint32));
+				}
+
 				file.close();
-				currentChanges.clear();
+				currentFrame.clear();
 			}
 		}
 	}
@@ -178,7 +208,7 @@ void SpectatorController::Update(const float& deltaTime)
 		{
 			bIsPlayback = true;
 			playbackIndex = 0;
-			playbackChanges.clear();
+			playbackFrames.clear();
 			LOG("Begin playback for '%s'", demoFileName.c_str());
 			
 			// Load file
@@ -186,36 +216,93 @@ void SpectatorController::Update(const float& deltaTime)
 			uint32 count;
 
 			// Read all frames in the file
-			while (file.good())
+			do
 			{
-				char temp;
-				file >> count >> temp;
-				std::vector<IsoChange> frame;
-				frame.resize(count);
+				VoxelFrame frame;
 
-				file.read(reinterpret_cast<char*>(frame.data()), count * sizeof(IsoChange));
-				playbackChanges.push_back(frame);
-			}
+				// Read deltas
+				{
+					uint32 count;
+					file.read(reinterpret_cast<char*>(&count), sizeof(uint32));
+					frame.deltas.resize(count);
+
+					void* data = frame.deltas.data();
+					file.read(reinterpret_cast<char*>(frame.deltas.data()), frame.deltas.size() * sizeof(VoxelDelta));
+				}
+
+				// Read results
+				{
+					void* data;
+
+					data = &frame.results.insertTime;
+					file.read(reinterpret_cast<char*>(data), sizeof(int64));
+					data = &frame.results.totalTime;
+					file.read(reinterpret_cast<char*>(data), sizeof(int64));
+
+					uint32 count;
+					file.read(reinterpret_cast<char*>(&count), sizeof(uint32));
+					frame.results.buildTime.resize(count);
+					frame.results.tricount.resize(count);
+
+					data = frame.results.buildTime.data();
+					file.read(reinterpret_cast<char*>(data), count * sizeof(int64));
+
+					data = frame.results.tricount.data();
+					file.read(reinterpret_cast<char*>(data), count * sizeof(uint32));
+				}
+
+				playbackFrames.push_back(frame);
+			} 
+			while (file.good());
 			file.close();
 
-			LOG("Read %i frames", playbackChanges.size());
+			// Delete last because dupe..??
+			playbackFrames.erase(playbackFrames.begin() + playbackFrames.size() - 1);
+			LOG("Read %i frames", playbackFrames.size());
 		}
 
 		// Play changes
 		if (bIsPlayback)
 		{
-			std::vector<IsoChange>& frame = playbackChanges[playbackIndex++];
-
-
-			for (IsoChange& change : frame)
-				Set(change.coord.x, change.coord.y, change.coord.z, change.value);
-
-
+			VoxelFrame& frame = playbackFrames[playbackIndex++];
+			frame.results = currentVolume->Rebuild(frame.deltas, &frame.results); // Replace results
+			
 			// Finished playback
-			if (playbackIndex >= playbackChanges.size())
+			if (playbackIndex >= playbackFrames.size())
 			{
 				LOG("Playback finished");
-				playbackChanges.clear();
+
+				// TODO - Format results
+				const uint32 count = playbackFrames[0].results.buildTime.size();
+				std::vector<float> averageBuildTime{ 0 };
+				std::vector<float> maxBuildTime{ 0 };
+				std::vector<float> averageTriCount{ 0 };
+
+				averageBuildTime.resize(count);
+				maxBuildTime.resize(count);
+				averageTriCount.resize(count);
+
+				for (VoxelFrame& frame : playbackFrames)
+				{
+					for (uint32 i = 0; i < count; ++i)
+					{
+						averageBuildTime[i] += frame.results.buildTime[i];
+						averageTriCount[i] += frame.results.tricount[i];
+
+						if (maxBuildTime[i] < frame.results.buildTime[i])
+							maxBuildTime[i] = frame.results.buildTime[i];
+					}
+				}
+
+				for (uint32 i = 0; i < count; ++i)
+				{
+					averageBuildTime[i] /= playbackFrames.size();
+					averageTriCount[i] /= playbackFrames.size();
+
+					LOG("LOD %i: Time:%f Count:%f Max Time:%f", i, averageBuildTime[i], averageTriCount[i], maxBuildTime[i]);
+				}
+
+				playbackFrames.clear();
 				bIsPlayback = false;
 			}
 
@@ -434,9 +521,10 @@ void SpectatorController::Set(const uint32& x, const uint32& y, const uint32& z,
 	{
 		if (bIsRecording)
 		{
-			IsoChange change{ {x,y,z}, value };
-			currentChanges.push_back(change);
+			VoxelDelta delta{ {x,y,z}, value };
+			currentFrame.deltas.push_back(delta);
 		}
-		currentVolume->Set(x, y, z, value);
+		else
+			currentVolume->Set(x, y, z, value);
 	}
 }

@@ -62,9 +62,11 @@ void OctreeLayerNode::OnSafeDestroy()
 
 void OctreeLayerNode::Push(const uint32& corner, const LayeredVolume* volume, const float& value)
 {
+	const float oldValue = m_values[corner];
 	m_values[corner] = value;
 
 	// Update case index
+	const uint32 oldCase = m_caseIndex;
 	const float isoLevel = volume->GetIsoLevel();
 
 	// Set bit to 1
@@ -93,6 +95,10 @@ void OctreeLayerNode::Push(const uint32& corner, const LayeredVolume* volume, co
 		else if (corner == CHILD_OFFSET_FR_TOP_L) m_caseIndex &= ~128;
 		else { LOG_ERROR("Invalid corner used in push"); }
 	}
+
+	// Only notify for rebuild if note worty change happens
+	if (oldCase != m_caseIndex || (value != oldValue && (m_caseIndex != 0 || m_caseIndex != 255)))
+		m_layer->rebuildFlag = true;
 
 	RecalculateStats();
 	// TODO - Calculate and cache edges?
@@ -479,15 +485,6 @@ void OctreeLayerNode::CountEdgeIntesection(const uint32& edge, const uint32& max
 
 bool OctreeLayerNode::RequiresHigherDetail(const uint32& maxDepthOffset) const
 {
-	if (m_id == 1454)
-	{
-		std::array<OctreeLayerNode*, 8> chil;
-		FetchChildren(chil);
-
-		int n = 0;
-		n++;
-	}
-
 	// Not point doing further checks if there is not children
 	if (m_childFlags == 0)
 		return false;
@@ -573,17 +570,17 @@ bool OctreeLayer::HandlePush(const uint32& x, const uint32& y, const uint32& z, 
 	return true;
 }
 
-void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offset, float value)
+bool OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offset, float value)
 {
 	uvec3 nodeCoords = uvec3(localCoords.x + offset.x, localCoords.y + offset.y, localCoords.z + offset.z);
 	if ((localCoords.x == 0 && offset.x < 0) || (localCoords.y == 0 && offset.y < 0) || (localCoords.z == 0 && offset.z < 0))
-		return; // Requested coords out of range
+		return false; // Requested coords out of range
 
 	const uint32 id = GetID(nodeCoords.x, nodeCoords.y, nodeCoords.z);
 
 	// If id is outside of node range of this layer offset has overflowed
 	if (id < m_startIndex || id > m_endIndex)
-		return;
+		return false;
 
 
 	// Find node
@@ -600,14 +597,44 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 			m_nodes.erase(id);
 			node->OnSafeDestroy();
 			delete node;
+			return false;
 		}
+
+		return true;
 	}
+
+	return false;
 }
 
-void OctreeLayer::BuildMesh(MeshBuilderMinimal& builder, const uint32& maxDepthOffset)
+bool OctreeLayer::BuildMesh(MeshBuilderMinimal& builder, const uint32& maxDepthOffset)
 {
-	for (const auto& node : m_nodes)
-		node.second->BuildMesh(m_volume->GetIsoLevel(), builder, maxDepthOffset, this, maxDepthOffset);
+	// Check lower layers to see if need to rebuild
+	if (!rebuildFlag)
+	{
+		OctreeLayer* layer = nextLayer;
+
+		for (uint32 i = 0; i < maxDepthOffset; ++i) 
+		{
+			if (layer == nullptr)
+				break;
+			if (layer->rebuildFlag)
+			{
+				rebuildFlag = true;
+				break;
+			}
+			layer = layer->nextLayer;
+		}
+	}
+
+	// Force build to happen
+	if (rebuildFlag)
+	{
+		for (const auto& node : m_nodes)
+			node.second->BuildMesh(m_volume->GetIsoLevel(), builder, maxDepthOffset, this, maxDepthOffset);
+		rebuildFlag = false;
+		return true;
+	}
+	return false;
 }
 
 bool OctreeLayer::ProjectEdgeOntoFace(const uvec3& a, const uvec3& b, const uint32& maxDepthOffset, vec3& overrideOutput, const uvec3& c00, const uvec3& c01, const uvec3& c10, const uvec3& c11) const
@@ -1015,6 +1042,9 @@ LayeredVolume::LayeredVolume()
 }
 LayeredVolume::~LayeredVolume()
 {
+	for (Mesh* mesh : m_meshes)
+		delete mesh;
+
 	if (m_material != nullptr)
 		delete m_material;
 	if (m_wireMaterial != nullptr)
@@ -1036,29 +1066,18 @@ void LayeredVolume::Begin()
 	m_material = new DefaultMaterial;
 	m_wireMaterial = new InteractionMaterial(vec4(0.0f, 1.0f, 0.0f, 1.0f));
 	m_debugMaterial = new InteractionMaterial(vec4(0.0f, 0.0f, 0.0f, 1.0f));
-
-	TEST_MESH = new Mesh;
-	TEST_MESH->MarkDynamic();
 }
 
-//#include <iostream>
-static uint32 level = 0;
-static uint32 depth = 0;
 void LayeredVolume::Update(const float & deltaTime)
 {
 	if (TEST_REBUILD)
 	{
-		//BuildMesh();
 		MeshBuilderMinimal builder;
-		m_layers[level]->BuildMesh(builder, depth);
-		//m_layers[m_layers.size() - 1]->BuildMesh(builder);
-		builder.BuildMesh(TEST_MESH);
+		m_layers[currentLod]->BuildMesh(builder, lodDepth);
+		builder.BuildMesh(m_meshes[currentLod]);
 
-		LOG("Build Count:%i", TEST_MESH->GetDrawCount());
+		LOG("Build Count:%i", m_meshes[currentLod]->GetDrawCount());
 		TEST_REBUILD = false;
-
-		//for (float& f : m_data)
-		//	std::cout << f << ", ";
 	}
 }
 
@@ -1074,14 +1093,14 @@ void LayeredVolume::Draw(const Window * window, const float & deltaTime)
 		drawMainObject = !drawMainObject;
 
 
-	if (TEST_MESH != nullptr)
+	if (m_meshes[currentLod] != nullptr)
 	{
 		Transform t;
 
 		if (drawMainObject)
 		{
 			m_material->Bind(window, GetLevel());
-			m_material->PrepareMesh(TEST_MESH);
+			m_material->PrepareMesh(m_meshes[currentLod]);
 			m_material->RenderInstance(&t);
 			m_material->Unbind(window, GetLevel());
 		}
@@ -1089,21 +1108,11 @@ void LayeredVolume::Draw(const Window * window, const float & deltaTime)
 		if (drawWireFrame)
 		{
 			m_wireMaterial->Bind(window, GetLevel());
-			m_wireMaterial->PrepareMesh(TEST_MESH);
+			m_wireMaterial->PrepareMesh(m_meshes[currentLod]);
 			m_wireMaterial->RenderInstance(&t);
 			m_wireMaterial->Unbind(window, GetLevel());
 		}
 	}
-	/*
-	if (keyboard->IsKeyDown(Keyboard::Key::KV_F) && m_debugMesh != nullptr && m_debugMaterial != nullptr)
-	{
-		Transform t;
-		m_debugMaterial->Bind(window, GetLevel());
-		m_debugMaterial->PrepareMesh(m_debugMesh);
-		m_debugMaterial->RenderInstance(&t);
-		m_debugMaterial->Unbind(window, GetLevel());
-	}
-	*/
 
 	// Completely rebuild mesh
 	if (keyboard->IsKeyPressed(Keyboard::Key::KV_N))
@@ -1121,21 +1130,19 @@ void LayeredVolume::Draw(const Window * window, const float & deltaTime)
 
 	if (keyboard->IsKeyPressed(Keyboard::Key::KV_U))
 	{
-		level++;
-		if (level >= m_layers.size())
-			level = 0;
+		currentLod++;
+		if (currentLod >= m_layers.size())
+			currentLod = 0;
 
-		TEST_REBUILD = true;
-		LOG("Level %i", level);
+		LOG("Level %i", currentLod);
 	}
 	if (keyboard->IsKeyPressed(Keyboard::Key::KV_I))
 	{
-		depth++;
-		if (depth >= m_layers.size())
-			depth = 0;
+		lodDepth++;
+		if (lodDepth >= m_layers.size())
+			lodDepth = 0;
 
-		TEST_REBUILD = true;
-		LOG("Depth %i", depth);
+		LOG("Depth %i", lodDepth);
 	}
 }
 
@@ -1166,7 +1173,7 @@ void LayeredVolume::Init(const uvec3 & resolution, const vec3 & scale)
 
 	// Allocate number of layers
 	const uint32 maxDepth = (uint32)ceil(log2(res - 1)) + 1;
-	const uint32 layerCount = maxDepth - 1;// 5; // Check layer count is not greater than maxDepth
+	const uint32 layerCount = 6;// 5; // Check layer count is not greater than maxDepth
 	m_layers.clear();
 	OctreeLayer* previousLayer = nullptr;
 
@@ -1191,6 +1198,9 @@ void LayeredVolume::Init(const uvec3 & resolution, const vec3 & scale)
 		previousLayer = layer;
 	}
 
+	// Create meshes
+	for (uint32 i = 0; i < m_layers.size(); ++i)
+		m_meshes.push_back(new Mesh);
 }
 
 void LayeredVolume::Set(uint32 x, uint32 y, uint32 z, float value)
@@ -1216,4 +1226,52 @@ float LayeredVolume::Get(uint32 x, uint32 y, uint32 z) const
 		return UNKNOWN_BUILD_VALUE;
 
 	return m_data[GetIndex(x, y, z)];
+}
+
+#include <chrono>
+using namespace std::chrono;
+VoxelBuildResults LayeredVolume::Rebuild(const std::vector<VoxelDelta>& deltas, VoxelBuildResults* recreation) 
+{
+	// recreation ignored for LayeredVolume
+	VoxelBuildResults results;
+
+	results.buildTime.resize(m_layers.size());
+	results.tricount.resize(m_layers.size());
+
+
+	int64 startTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	int64 endTime;
+
+	// Insert values
+	for (const VoxelDelta& delta : deltas)
+	{
+		for (OctreeLayer* layer : m_layers)
+			layer->HandlePush(delta.coord.x, delta.coord.y, delta.coord.z, delta.value);
+
+		m_data[GetIndex(delta.coord.x, delta.coord.y, delta.coord.z)] = delta.value;
+	}
+	endTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	results.insertTime = endTime - startTime;
+
+
+	// Rebuild meshes
+	for (uint32 i = 0; i < m_layers.size(); ++i)
+	{
+		int64 buildStartTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+		MeshBuilderMinimal builder;
+		builder.MarkDynamic();
+		if(m_layers[i]->BuildMesh(builder, lodDepth))
+			builder.BuildMesh(m_meshes[i]);
+		
+		endTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+		results.buildTime[i] = endTime - buildStartTime;
+		results.tricount[i] = m_meshes[i]->GetDrawCount();
+	}
+
+
+	// Total time
+	endTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	results.totalTime = endTime - startTime;
+	return results;
 }

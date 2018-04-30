@@ -2,6 +2,7 @@
 #include "Common.h"
 #include "Ray.h"
 #include <vector>
+#include <ctime>
 
 
 /// The value that every voxel will be set to by defaul
@@ -14,6 +15,35 @@
 #ifndef UNKNOWN_BUILD_VALUE
 #define UNKNOWN_BUILD_VALUE 0.0f
 #endif
+
+
+/**
+* Structure for storing a simple change in a voxel surface
+*/
+struct VoxelDelta
+{
+	uvec3 coord;
+	float value;
+};
+
+/**
+* Results for when trying to build multiple LODs
+*/
+struct VoxelBuildResults 
+{
+	int64 insertTime;
+	int64 totalTime;
+	std::vector<int64> buildTime;
+	std::vector<uint32> tricount;
+
+	inline void clear()
+	{
+		insertTime = 0;
+		totalTime = 0;
+		buildTime.clear();
+		tricount.clear();
+	}
+};
 
 
 /**
@@ -71,6 +101,14 @@ public:
 	* @param scale				The scale to use for the data
 	*/
 	virtual void Init(const uvec3& resolution, const vec3& scale) = 0;
+
+	/**
+	* Attempt to apply these changes and rebuild the mesh
+	* @param deltas				All the changes to apply
+	* @param recreation			Data that should be recreated (null if not recreation)
+	* @returns The results of this rebuild
+	*/
+	virtual VoxelBuildResults Rebuild(const std::vector<VoxelDelta>& deltas, VoxelBuildResults* recreation) = 0;
 
 
 	/**
