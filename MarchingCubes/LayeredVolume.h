@@ -28,8 +28,9 @@ private:
 	uint8 m_childFlags = 0;
 
 	std::array<float, 8> m_values;
-	float m_average;
-	float m_stdDeviation;
+	uint8 m_safeQualityDepth;
+	//float m_average;
+	//float m_stdDeviation;
 	OctreeLayer* m_layer;
 
 public:
@@ -50,6 +51,7 @@ public:
 	*/
 	void Push(const uint32& corner, const LayeredVolume* volume, const float& value);
 	
+
 	/**
 	* Build the actual mesh for just this node
 	* @param isoLevel				The iso level to build at
@@ -127,26 +129,21 @@ public:
 	/**
 	* Does this node have multiple intersections on any of it's edges
 	* (Will check all children down to leafs or when maxDepthOffset == 0)
-	* @param maxDepthOffset		How much deeped should be considered for this check
 	* @returns True if any of it's edges has multiple intersections
 	*/
-	bool HasMultipleIntersections(const uint32& maxDepthOffset) const;
-
-	/**
-	* Count how many interesections exist for this edge
-	* (Will check all children down to leafs or when maxDepthOffset == 0)
-	* @param edge				The MC id of the edge
-	* @param max				If the count exceeds this value, the calls will stop
-	* @param outCount			The running count of edge intersections
-	* @param maxDepthOffset		How much deeped should be considered for this check
-	*/
-	void CountEdgeIntesection(const uint32& edge, const uint32& max, uint32& outCount, const uint32& maxDepthOffset) const;
+	bool HasMultipleIntersections() const;
 
 private:
 	/**
 	* Recalculate stats relevant to this node
 	*/
 	void RecalculateStats();
+
+	/**
+	* Recalculate all detail required parts
+	* (Assumes children's merge depths are correct)
+	*/
+	void RecalculateMergeDepth();
 
 private:
 	/**

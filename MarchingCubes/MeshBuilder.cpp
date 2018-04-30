@@ -180,7 +180,16 @@ void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count)
 			const vec3& B = oldVertices[b];
 			const vec3& C = oldVertices[c];
 
-			if (A != B && A != C && B != C)
+			// Ignore triangle which is malformed
+			if (A == B || A == C || B == C)
+				continue;
+
+
+			const vec3 normal = glm::cross(B - A, C - A);
+			const float normalLengthSqrd = dot(normal, normal);
+
+			// If normal is 0 it means the edge has been moved so the face is now a line
+			if (normalLengthSqrd != 0.0f && !std::isnan(normalLengthSqrd))
 			{
 				const uint32 na = AddVertex(A, oldNormals[a]);
 				const uint32 nb = AddVertex(B, oldNormals[b]);

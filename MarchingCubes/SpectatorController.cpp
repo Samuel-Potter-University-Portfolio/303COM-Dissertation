@@ -274,6 +274,7 @@ void SpectatorController::Update(const float& deltaTime)
 
 				// TODO - Format results
 				const uint32 count = playbackFrames[0].results.buildTime.size();
+				float averageInsertTime = 0;
 				std::vector<float> averageBuildTime{ 0 };
 				std::vector<float> maxBuildTime{ 0 };
 				std::vector<float> averageTriCount{ 0 };
@@ -284,6 +285,8 @@ void SpectatorController::Update(const float& deltaTime)
 
 				for (VoxelFrame& frame : playbackFrames)
 				{
+					averageInsertTime += frame.results.insertTime;
+
 					for (uint32 i = 0; i < count; ++i)
 					{
 						averageBuildTime[i] += frame.results.buildTime[i];
@@ -294,12 +297,15 @@ void SpectatorController::Update(const float& deltaTime)
 					}
 				}
 
+				averageInsertTime /= playbackFrames.size();
+				LOG("Stats: Insert Time:%f", averageInsertTime);
+
 				for (uint32 i = 0; i < count; ++i)
 				{
 					averageBuildTime[i] /= playbackFrames.size();
 					averageTriCount[i] /= playbackFrames.size();
 
-					LOG("LOD %i: Time:%f Count:%f Max Time:%f", i, averageBuildTime[i], averageTriCount[i], maxBuildTime[i]);
+					LOG("LOD %i: Build Time:%f Count:%f Max Time:%f", i, averageBuildTime[i], averageTriCount[i], maxBuildTime[i]);
 				}
 
 				playbackFrames.clear();

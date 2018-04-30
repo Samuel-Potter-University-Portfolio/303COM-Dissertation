@@ -98,12 +98,12 @@ void OctreeLayerNode::Push(const uint32& corner, const LayeredVolume* volume, co
 
 	// Only notify for rebuild if note worty change happens
 	if (oldCase != m_caseIndex || (value != oldValue && (m_caseIndex != 0 || m_caseIndex != 255)))
+	{
 		m_layer->rebuildFlag = true;
+		RecalculateStats();
+	}
 
-	RecalculateStats();
-	// TODO - Calculate and cache edges?
 }
-
 
 uint32 OctreeLayerNode::GetOffsetAsChild() const
 {
@@ -311,6 +311,14 @@ void OctreeLayerNode::FetchChildren(std::array<OctreeLayerNode*, 8>& outList) co
 
 void OctreeLayerNode::RecalculateStats()
 {
+	RecalculateMergeDepth();
+
+	// Notify parent
+	OctreeLayerNode* parent;
+	if (m_id != 0 && m_layer->AttemptNodeFetch(GetParentID(), parent, false))
+		parent->RecalculateStats();
+
+	/*
 	// Calculate average
 	m_average = 0.0f;
 	for (int i = 0; i < 8; ++i)
@@ -322,6 +330,54 @@ void OctreeLayerNode::RecalculateStats()
 	for (int i = 0; i < 8; ++i)
 		sum += std::pow(m_values[i] - m_average, 2);
 	m_stdDeviation = std::sqrt(sum / 8.0f);
+	*/
+}
+
+void OctreeLayerNode::RecalculateMergeDepth()
+{
+	// Recalculate how deep this node can go before loosing too much detail (Assumes children are correct)
+	m_safeQualityDepth = 0;
+
+	// Not point doing further checks if there is not children
+	if (m_childFlags == 0)
+		return;
+
+	// Lowest allowed size, so cannot merge
+	if (m_layer->GetNodeResolution() == 2)
+		return;
+
+
+	// Check if children require more detail
+	std::array<OctreeLayerNode*, 8> children;
+	FetchChildren(children);
+
+	// Check children are all simple case
+	bool childrenSimple = true;
+	for (OctreeLayerNode* child : children)
+		if (child && !child->IsSimpleCase()) 
+		{
+			childrenSimple = false;
+			break;
+		}
+
+	// It is safe to merge this node at this height
+	if (childrenSimple && IsSimpleCase() && !HasMultipleIntersections())
+		return;
+
+	// Get the smallest merge depth from the children
+	m_safeQualityDepth = 255;
+	for (OctreeLayerNode* child : children)
+		if (child)
+		{
+			const uint8 depth = child->m_safeQualityDepth + 1;
+
+			if(depth < m_safeQualityDepth)
+				m_safeQualityDepth = depth;
+		}
+
+	// TODO - Check for multi
+	// If the values deviate by too much, merge them
+	//return m_average < m_layer->GetVolume()->GetIsoLevel() && m_stdDeviation > 0.1;
 }
 
 bool OctreeLayerNode::IsSimpleCase() const 
@@ -330,10 +386,8 @@ bool OctreeLayerNode::IsSimpleCase() const
 	return simpleCases.find(m_caseIndex) != simpleCases.end();
 }
 
-bool OctreeLayerNode::HasMultipleIntersections(const uint32& maxDepthOffset) const 
+bool OctreeLayerNode::HasMultipleIntersections() const 
 {
-	if (maxDepthOffset == 0)
-		return false;
 	//*
 	// Check all possible edges inside and outside this node (For it's children)
 	std::array<OctreeLayerNode*, 8> children;
@@ -411,120 +465,18 @@ bool OctreeLayerNode::HasMultipleIntersections(const uint32& maxDepthOffset) con
 	}
 	
 	for (OctreeLayerNode* child : children)
-		if (child && child->HasMultipleIntersections(maxDepthOffset))
+		if (child && child->HasMultipleIntersections())
 			return true;
 
 	return false;
-	//*/
-
-	uint32 count = 0;
-
-	// Check for intersections on all edges
-	for (uint32 i = 0; i < 12; ++i)
-	{
-		const uint32 edgeFlag = (1 << i);
-		const bool hasEdge = (MC::CaseRequiredEdges[m_caseIndex] & edgeFlag) != 0 ? 1 : 0;
-		count = 0;
-
-		const uint32 max = (hasEdge ? 3 : 2);
-		CountEdgeIntesection(i, max, count, maxDepthOffset);
-		if (count >= max)
-			return true;
-	}
-	
-	return false;
-}
-
-void OctreeLayerNode::CountEdgeIntesection(const uint32& edge, const uint32& max, uint32& outCount, const uint32& maxDepthOffset) const
-{
-	// Reached/Exceeded max value, so don't continue checks
-	if (outCount >= max)
-		return;
-
-	// Reached lowest layer
-	if (m_layer->GetNodeResolution() == 2 || maxDepthOffset == 0)
-	{
-		const uint32 edgeFlag = (1 << edge);
-		outCount += (MC::CaseRequiredEdges[m_caseIndex] & edgeFlag) != 0 ? 1 : 0;
-	}
-
-	// At intermediate level, so check further down the tree
-	else 
-	{
-		// Gets the ids of the nodes
-		static std::array<uvec2, 12> nodeEdgeLookup
-		{
-			uvec2(0,1),
-			uvec2(1,2),
-			uvec2(2,3),
-			uvec2(0,3),
-
-			uvec2(4,5),
-			uvec2(5,6),
-			uvec2(6,7),
-			uvec2(4,7),
-
-			uvec2(0,4),
-			uvec2(1,5),
-			uvec2(2,6),
-			uvec2(3,7)
-		};
-
-		const uvec2& edgeNodes = nodeEdgeLookup[edge];
-		OctreeLayerNode* temp;
-
-		// Count interesections at first node
-		if (GetChildFlag(edgeNodes.x) && m_layer->AttemptNodeFetch(GetChildID(edgeNodes.x), temp, false))
-			temp->CountEdgeIntesection(edge, max, outCount, maxDepthOffset - 1);
-
-		// Count intersections at second node
-		if (GetChildFlag(edgeNodes.y) && m_layer->AttemptNodeFetch(GetChildID(edgeNodes.y), temp, false))
-			temp->CountEdgeIntesection(edge, max, outCount, maxDepthOffset - 1);
-	}
 }
 
 bool OctreeLayerNode::RequiresHigherDetail(const uint32& maxDepthOffset) const
 {
-	// Not point doing further checks if there is not children
-	if (m_childFlags == 0)
+	if (m_safeQualityDepth == 0 || maxDepthOffset == 0)
 		return false;
 
-	// Lowest allowed size, so cannot merge
-	if (m_layer->GetNodeResolution() == 2 || maxDepthOffset == 0)
-		return false;
-
-
-	// If this isn't a simple case, it cannot be merged
-	if (!IsSimpleCase())
-		return true;
-	
-
-	// Check if children require more detail
-	OctreeLayerNode* children[8];
-	for (uint32 i = 0; i < 8; ++i)
-	{
-		if (!GetChildFlag(i) || !m_layer->AttemptNodeFetch(GetChildID(i), children[i], false))
-			children[i] = nullptr;
-
-		// Check that the children are simple cases
-		else if (!children[i]->IsSimpleCase())
-			return true;
-
-		// Child requires more detail
-		else if (children[i]->RequiresHigherDetail(maxDepthOffset - 1))
-			return true;
-	}
-	
-
-	// Check for multiple intersections on this nodes edge
-	if (HasMultipleIntersections(maxDepthOffset))
-		return true;
-
-
-	// TODO - Check for multi
-	// If the values deviate by too much, merge them
-	return false;
-	//return m_average < m_layer->GetVolume()->GetIsoLevel() && m_stdDeviation > 0.1;
+	return (m_safeQualityDepth >= maxDepthOffset);
 }
 
 ///
@@ -1119,12 +1071,18 @@ void LayeredVolume::Draw(const Window * window, const float & deltaTime)
 	{
 		buildDebugMesh = false;
 		TEST_REBUILD = true;
+		for (OctreeLayer* layer : m_layers)
+			layer->rebuildFlag = true;
+
 		LOG("Done");
 	}
 	if (keyboard->IsKeyPressed(Keyboard::Key::KV_M))
 	{
 		buildDebugMesh = true;
 		TEST_REBUILD = true;
+		for (OctreeLayer* layer : m_layers)
+			layer->rebuildFlag = true;
+
 		LOG("Done");
 	}
 
@@ -1201,6 +1159,8 @@ void LayeredVolume::Init(const uvec3 & resolution, const vec3 & scale)
 	// Create meshes
 	for (uint32 i = 0; i < m_layers.size(); ++i)
 		m_meshes.push_back(new Mesh);
+
+	currentLod = m_layers.size() - 1;
 }
 
 void LayeredVolume::Set(uint32 x, uint32 y, uint32 z, float value)
