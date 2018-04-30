@@ -109,6 +109,7 @@ void DefaultVolume::Draw(const class Window* window, const float& deltaTime)
 	}
 }
 
+#include "Logger.h"
 void DefaultVolume::BuildMesh() 
 {
 	MeshBuilderMinimal builder;
@@ -195,6 +196,6 @@ void DefaultVolume::BuildMesh()
 			}
 
 
-	builder.PerformEdgeCollapseReduction(3000);
+	//builder.PerformEdgeCollapseReduction(10000);
 	builder.BuildMesh(m_mesh);
 }

@@ -55,4 +55,6 @@ public:
 
 	/** Should the resulting mesh be consider for dynamically uploading data*/
 	inline void MarkDynamic() { bIsDynamic = true; }
+
+	inline uint32 GetIndexCount() const { return m_indices.size(); }
 };

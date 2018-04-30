@@ -51,7 +51,9 @@ struct uvec2_KeyFuncs
 
 void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count) 
 {
-	std::unordered_map<uint32, std::unordered_map<uint32, vec3>> triNormals;
+	// As per https://github.com/andandandand/progressive-mesh-reduction-with-edge-collapse
+
+	std::unordered_map<uint32, std::unordered_map<uvec2, vec3, uvec2_KeyFuncs, uvec2_KeyFuncs>> triNormals;
 	std::unordered_map<uvec2, float, uvec2_KeyFuncs, uvec2_KeyFuncs> edgeCosts;
 	
 	// Produce triangle lists
@@ -67,14 +69,9 @@ void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count)
 
 		// Add normal
 		const vec3 normal = normalize(cross(B - A, C - A));
-		triNormals[b][a] = normal;
-		triNormals[c][a] = normal;
-
-		triNormals[a][b] = normal;
-		triNormals[c][b] = normal;
-
-		triNormals[a][c] = normal;
-		triNormals[b][c] = normal;
+		triNormals[a][uvec2(b, c)] = normal;
+		triNormals[b][uvec2(a, c)] = normal;
+		triNormals[c][uvec2(a, b)] = normal;
 
 		// Init with empty costs
 		edgeCosts[uvec2(b, a)] = 0.0f;
@@ -101,13 +98,13 @@ void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count)
 			{
 				float minPart = 10000000000;
 
-				for (auto& triB : triNormals[b])
+				for (auto& triAinner : triNormals[a])
 				{
-					auto it = triNormals[a].find(triB.first);
-					if (it == triNormals[a].end())
+					// Triangle does't contain edge a->b
+					if (triAinner.first.x != b && triAinner.first.y != b)
 						continue;
 
-					const float inner = (1.0f - dot(triA.second, triB.second)) * 0.5f;
+					const float inner = (1.0f - dot(triA.second, triAinner.second)) * 0.5f;
 					if (inner < minPart)
 						minPart = inner;
 				}
@@ -121,16 +118,16 @@ void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count)
 
 
 	std::unordered_map<uint32, uint32> edgeMerges;
-
+	
 	// Remove edges
-	for (uint32 i = 0; i < count; ++i) 
+	for (int32 i = 0; i < count; ) 
 	{
 		float minCost = 10000000000;
 		uvec2 minEdge;
 
 		// Find edge with smallest cost
 		for(auto& pair : edgeCosts)
-			if (pair.second < minCost)
+			if (pair.second != 0 && pair.second < minCost)
 			{
 				minCost = pair.second;
 				minEdge = pair.first;
@@ -138,84 +135,103 @@ void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count)
 		
 		// Add merged edge to table
 		edgeMerges[minEdge.x] = minEdge.y;
+		auto oldTrisA = triNormals[minEdge.x];
+		auto oldTrisB = triNormals[minEdge.y];
+		int32 removeCount = oldTrisA.size() + oldTrisB.size();
 
-
-		for (auto& edges : triNormals[minEdge.x])
-		{
-			// Calc cost for a->b
-			const uint32& a = minEdge.y;
-			const uint32& b = edges.first;
-			const float len = length(m_vertices[a] - m_vertices[b]);
-
-			float cost = 0;
-
-			for (auto& triA : triNormals[a])
-			{
-				if (triA.first == minEdge.x)
-					continue;
-
-				float minPart = 10000000000;
-
-				for (auto& triB : triNormals[b])
-				{
-					if (triB.first == minEdge.x)
-						continue;
-
-					auto it = triNormals[a].find(triB.first);
-					if (it == triNormals[a].end())
-						continue;
-
-					const float inner = (1.0f - dot(triA.second, triB.second)) * 0.5f;
-					if (inner < minPart)
-						minPart = inner;
-				}
-
-				if (minPart > cost)
-					cost = minPart;
-			}
-
-			edgeCosts[uvec2(a, b)] = cost;
-		}
-		for (auto& edges : triNormals[minEdge.y])
-		{
-			// Calc cost for a->b
-			const uint32& a = minEdge.y;
-			const uint32& b = edges.first;
-			const float len = length(m_vertices[a] - m_vertices[b]);
-
-			float cost = 0;
-
-			for (auto& triA : triNormals[a])
-			{
-				if (triA.first == minEdge.x)
-					continue;
-
-				float minPart = 10000000000;
-
-				for (auto& triB : triNormals[b])
-				{
-					if (triB.first == minEdge.x)
-						continue;
-
-					auto it = triNormals[a].find(triB.first);
-					if (it == triNormals[a].end())
-						continue;
-
-					const float inner = (1.0f - dot(triA.second, triB.second)) * 0.5f;
-					if (inner < minPart)
-						minPart = inner;
-				}
-
-				if (minPart > cost)
-					cost = minPart;
-			}
-
-			edgeCosts[uvec2(a, b)] = cost;
-		}
-
-		// Update costs
+		// Get rid of old tris
 		triNormals.erase(minEdge.x);
+		triNormals.erase(minEdge.y);
 		edgeCosts.erase(minEdge);
+
+		for (auto it = edgeCosts.begin(); it != edgeCosts.end();) 
+		{
+			if (it->first.x == minEdge.x || it->first.y == minEdge.x)
+				edgeCosts.erase(it++);
+			else
+				it++;
+		}
+
+
+		// Add new tris
+		std::vector<uvec2> newEdges;
+
+		for (auto& tri : oldTrisB)
+		{
+			// Safe to re-add
+			if (tri.first.x != minEdge.x && tri.first.y != minEdge.x)
+			{
+				triNormals[minEdge.y][tri.first] = tri.second;
+				newEdges.push_back(uvec2(minEdge.y, tri.first.x));
+				newEdges.push_back(uvec2(minEdge.y, tri.first.y));
+
+				newEdges.push_back(uvec2(tri.first.x, minEdge.y));
+				newEdges.push_back(uvec2(tri.first.x, tri.first.y));
+
+				newEdges.push_back(uvec2(tri.first.y, minEdge.y));
+				newEdges.push_back(uvec2(tri.first.y, tri.first.x));
+				removeCount--;
+			}
+		}
+		for (auto& tri : oldTrisA)
+		{
+			// Safe to re-add
+			if (tri.first.x != minEdge.y && tri.first.y != minEdge.y)
+			{
+				auto it = triNormals[minEdge.y].find(tri.first);
+
+				if (it == triNormals[minEdge.y].end())
+				{
+					triNormals[minEdge.y][tri.first] = tri.second;
+					newEdges.push_back(uvec2(minEdge.y, tri.first.x));
+					newEdges.push_back(uvec2(minEdge.y, tri.first.y));
+
+					newEdges.push_back(uvec2(tri.first.x, minEdge.y));
+					newEdges.push_back(uvec2(tri.first.x, tri.first.y));
+
+					newEdges.push_back(uvec2(tri.first.y, minEdge.y));
+					newEdges.push_back(uvec2(tri.first.y, tri.first.x));
+					removeCount--;
+				}
+			}
+		}
+
+		// Re-calc costs
+		for (const vec2& edge : newEdges)
+		{
+			// Calc cost for a->b
+			const uint32& a = edge.x;
+			const uint32& b = edge.y;
+			const float len = length(m_vertices[a] - m_vertices[b]);
+
+			float cost = 0;
+
+			for (auto& triA : triNormals[a])
+			{
+				float minPart = 10000000000;
+
+				for (auto& triAinner : triNormals[a])
+				{
+					// Triangle does't contain edge a->b
+					if (triAinner.first.x != b && triAinner.first.y != b)
+						continue;
+
+					const float inner = (1.0f - dot(triA.second, triAinner.second)) * 0.5f;
+					if (inner < minPart)
+						minPart = inner;
+				}
+
+				if (minPart > cost)
+					cost = minPart;
+			}
+
+			edgeCosts[edge] = cost;
+		}
+
+		if (removeCount == 0)
+			i++;
+		else
+			i += removeCount;
 	}
 
 	// Put new edges into mesh
@@ -244,10 +260,16 @@ void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count)
 		if (it != edgeMerges.end())
 			c = it->second;
 
-		const uint32 na = AddVertex(oldVertices[a], oldNormals[a]);
-		const uint32 nb = AddVertex(oldVertices[b], oldNormals[b]);
-		const uint32 nc = AddVertex(oldVertices[c], oldNormals[c]);
+		const vec3& A = oldVertices[a];
+		const vec3& B = oldVertices[b];
+		const vec3& C = oldVertices[c];
 
-		AddTriangle(na, nb, nc);
+		if (A != B && A != C && B != C)
+		{
+			const uint32 na = AddVertex(A, oldNormals[a]);
+			const uint32 nb = AddVertex(B, oldNormals[b]);
+			const uint32 nc = AddVertex(C, oldNormals[c]);
+			AddTriangle(na, nb, nc);
+		}
 	}
 }

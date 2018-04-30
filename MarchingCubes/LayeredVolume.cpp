@@ -34,14 +34,14 @@ OctreeLayerNode::OctreeLayerNode(const uint32& id, OctreeLayer* layer, const boo
 		m_values[CHILD_OFFSET_FR_TOP_R] = volume->Get((nodeCoords.x + 1) * stride, (nodeCoords.y + 1) * stride, (nodeCoords.z + 1) * stride);
 
 		m_caseIndex = 0;
-		if (m_values[CHILD_OFFSET_BK_BOT_L] >= isoLevel) m_caseIndex |= 1;
-		if (m_values[CHILD_OFFSET_BK_BOT_R] >= isoLevel) m_caseIndex |= 2;
-		if (m_values[CHILD_OFFSET_FR_BOT_R] >= isoLevel) m_caseIndex |= 4;
-		if (m_values[CHILD_OFFSET_FR_BOT_L] >= isoLevel) m_caseIndex |= 8;
-		if (m_values[CHILD_OFFSET_BK_TOP_L] >= isoLevel) m_caseIndex |= 16;
-		if (m_values[CHILD_OFFSET_BK_TOP_R] >= isoLevel) m_caseIndex |= 32;
-		if (m_values[CHILD_OFFSET_FR_TOP_R] >= isoLevel) m_caseIndex |= 64;
-		if (m_values[CHILD_OFFSET_FR_TOP_L] >= isoLevel) m_caseIndex |= 128;
+		if (m_values[CHILD_OFFSET_BK_BOT_L] > isoLevel) m_caseIndex |= 1;
+		if (m_values[CHILD_OFFSET_BK_BOT_R] > isoLevel) m_caseIndex |= 2;
+		if (m_values[CHILD_OFFSET_FR_BOT_R] > isoLevel) m_caseIndex |= 4;
+		if (m_values[CHILD_OFFSET_FR_BOT_L] > isoLevel) m_caseIndex |= 8;
+		if (m_values[CHILD_OFFSET_BK_TOP_L] > isoLevel) m_caseIndex |= 16;
+		if (m_values[CHILD_OFFSET_BK_TOP_R] > isoLevel) m_caseIndex |= 32;
+		if (m_values[CHILD_OFFSET_FR_TOP_R] > isoLevel) m_caseIndex |= 64;
+		if (m_values[CHILD_OFFSET_FR_TOP_L] > isoLevel) m_caseIndex |= 128;
 
 		RecalculateStats();
 	}
@@ -68,7 +68,7 @@ void OctreeLayerNode::Push(const uint32& corner, const LayeredVolume* volume, co
 	const float isoLevel = volume->GetIsoLevel();
 
 	// Set bit to 1
-	if (value >= isoLevel)
+	if (value > isoLevel)
 	{
 		if		(corner == CHILD_OFFSET_BK_BOT_L) m_caseIndex |= 1;
 		else if (corner == CHILD_OFFSET_BK_BOT_R) m_caseIndex |= 2;
@@ -187,15 +187,28 @@ void OctreeLayerNode::BuildMesh(const float& isoLevel, MeshBuilderMinimal& build
 
 	if (buildDebugMesh)
 	{
-		const uint32 i0 = builder.AddVertex((vec3(layerCoords) + vec3(0.0f, 0.0f, 0.0f)) * stridef);
-		const uint32 i1 = builder.AddVertex((vec3(layerCoords) + vec3(1.0f, 0.0f, 0.0f)) * stridef);
-		const uint32 i2 = builder.AddVertex((vec3(layerCoords) + vec3(0.0f, 0.0f, 1.0f)) * stridef);
-		const uint32 i3 = builder.AddVertex((vec3(layerCoords) + vec3(1.0f, 0.0f, 1.0f)) * stridef);
+		uint32 childCount = 0;
+		if (m_childFlags & 1) childCount++;
+		if (m_childFlags & 2) childCount++;
+		if (m_childFlags & 4) childCount++;
+		if (m_childFlags & 8) childCount++;
+		if (m_childFlags & 16) childCount++;
+		if (m_childFlags & 64) childCount++;
+		if (m_childFlags & 128) childCount++;
+		if (m_childFlags & 256) childCount++;
 
-		const uint32 i4 = builder.AddVertex((vec3(layerCoords) + vec3(0.0f, 1.0f, 0.0f)) * stridef);
-		const uint32 i5 = builder.AddVertex((vec3(layerCoords) + vec3(1.0f, 1.0f, 0.0f)) * stridef);
-		const uint32 i6 = builder.AddVertex((vec3(layerCoords) + vec3(0.0f, 1.0f, 1.0f)) * stridef);
-		const uint32 i7 = builder.AddVertex((vec3(layerCoords) + vec3(1.0f, 1.0f, 1.0f)) * stridef);
+		const vec3 normal = (m_id == 1454 ? vec3(0, -1, 0) : vec3(0, 1, 0));
+		//TODO - Remove
+
+		const uint32 i0 = builder.AddVertex((vec3(layerCoords) + vec3(0.0f, 0.0f, 0.0f)) * stridef, normal);
+		const uint32 i1 = builder.AddVertex((vec3(layerCoords) + vec3(1.0f, 0.0f, 0.0f)) * stridef, normal);
+		const uint32 i2 = builder.AddVertex((vec3(layerCoords) + vec3(0.0f, 0.0f, 1.0f)) * stridef, normal);
+		const uint32 i3 = builder.AddVertex((vec3(layerCoords) + vec3(1.0f, 0.0f, 1.0f)) * stridef, normal);
+
+		const uint32 i4 = builder.AddVertex((vec3(layerCoords) + vec3(0.0f, 1.0f, 0.0f)) * stridef, normal);
+		const uint32 i5 = builder.AddVertex((vec3(layerCoords) + vec3(1.0f, 1.0f, 0.0f)) * stridef, normal);
+		const uint32 i6 = builder.AddVertex((vec3(layerCoords) + vec3(0.0f, 1.0f, 1.0f)) * stridef, normal);
+		const uint32 i7 = builder.AddVertex((vec3(layerCoords) + vec3(1.0f, 1.0f, 1.0f)) * stridef, normal);
 
 		builder.AddTriangle(i0, i1, i2); builder.AddTriangle(i2, i1, i3);
 		builder.AddTriangle(i4, i6, i5); builder.AddTriangle(i5, i6, i7);
@@ -315,7 +328,7 @@ bool OctreeLayerNode::HasMultipleIntersections(const uint32& maxDepthOffset) con
 {
 	if (maxDepthOffset == 0)
 		return false;
-
+	//*
 	// Check all possible edges inside and outside this node (For it's children)
 	std::array<OctreeLayerNode*, 8> children;
 	FetchChildren(children);
@@ -325,69 +338,69 @@ bool OctreeLayerNode::HasMultipleIntersections(const uint32& maxDepthOffset) con
 	// Check X dir
 	{
 		CHECK_EDGE(0, 1, 0);
-		//CHECK_EDGE(0, 1, 2);
-		//CHECK_EDGE(0, 1, 6);
-		//CHECK_EDGE(0, 1, 4);
+		CHECK_EDGE(0, 1, 2);
+		CHECK_EDGE(0, 1, 6); // Inside
+		CHECK_EDGE(0, 1, 4);
 
-		//CHECK_EDGE(2, 3, 0);
+		CHECK_EDGE(2, 3, 0);
 		CHECK_EDGE(2, 3, 2);
-		//CHECK_EDGE(2, 3, 6);
-		//CHECK_EDGE(2, 3, 4);
+		CHECK_EDGE(2, 3, 6);
+		CHECK_EDGE(2, 3, 4); // Inside
 
-		//CHECK_EDGE(7, 6, 0);
-		//CHECK_EDGE(7, 6, 2);
+		CHECK_EDGE(7, 6, 0); // Inside
+		CHECK_EDGE(7, 6, 2);
 		CHECK_EDGE(7, 6, 6);
-		//CHECK_EDGE(7, 6, 4);
+		CHECK_EDGE(7, 6, 4);
 
-		//CHECK_EDGE(4, 5, 0);
-		//CHECK_EDGE(4, 5, 2);
-		//CHECK_EDGE(4, 5, 6);
+		CHECK_EDGE(4, 5, 0);
+		CHECK_EDGE(4, 5, 2); // Inside
+		CHECK_EDGE(4, 5, 6);
 		CHECK_EDGE(4, 5, 4);
 	}
 
 	// Check Y dir
 	{
 		CHECK_EDGE(0, 4, 8);
-		//CHECK_EDGE(0, 4, 9);
-		//CHECK_EDGE(0, 4, 10);
-		//CHECK_EDGE(0, 4, 11);
+		CHECK_EDGE(0, 4, 9);
+		CHECK_EDGE(0, 4, 10); // Inside
+		CHECK_EDGE(0, 4, 11);
 
-		//CHECK_EDGE(1, 5, 8);
+		CHECK_EDGE(1, 5, 8);
 		CHECK_EDGE(1, 5, 9);
-		//CHECK_EDGE(1, 5, 10);
-		//CHECK_EDGE(1, 5, 11);
+		CHECK_EDGE(1, 5, 10);
+		CHECK_EDGE(1, 5, 11); // Inside
 
-		//CHECK_EDGE(2, 6, 8);
-		//CHECK_EDGE(2, 6, 9);
+		CHECK_EDGE(2, 6, 8); // Inside
+		CHECK_EDGE(2, 6, 9);
 		CHECK_EDGE(2, 6, 10);
-		//CHECK_EDGE(2, 6, 11);
+		CHECK_EDGE(2, 6, 11);
 
-		//CHECK_EDGE(3, 7, 8);
-		//CHECK_EDGE(3, 7, 9);
-		//CHECK_EDGE(3, 7, 10);
+		CHECK_EDGE(3, 7, 8);
+		CHECK_EDGE(3, 7, 9); // Inside
+		CHECK_EDGE(3, 7, 10);
 		CHECK_EDGE(3, 7, 11);
 	}
 
 	// Check Z dir
 	{
 		CHECK_EDGE(0, 3, 3);
-		//CHECK_EDGE(0, 3, 1);
-		//CHECK_EDGE(0, 3, 5);
-		//CHECK_EDGE(0, 3, 7);
+		CHECK_EDGE(0, 3, 1);
+		CHECK_EDGE(0, 3, 5); // Inside
+		CHECK_EDGE(0, 3, 7);
 
-		//CHECK_EDGE(1, 2, 3);
+		CHECK_EDGE(1, 2, 3);
 		CHECK_EDGE(1, 2, 1);
-		//CHECK_EDGE(1, 2, 5);
-		//CHECK_EDGE(1, 2, 7);
+		CHECK_EDGE(1, 2, 5);
+		CHECK_EDGE(1, 2, 7); // Inside
 
-		//CHECK_EDGE(5, 6, 3);
-		//CHECK_EDGE(5, 6, 1);
+		CHECK_EDGE(5, 6, 3); // Inside
+		CHECK_EDGE(5, 6, 1);
 		CHECK_EDGE(5, 6, 5);
-		//CHECK_EDGE(5, 6, 7);
+		CHECK_EDGE(5, 6, 7);
 
-		//CHECK_EDGE(4, 7, 3);
-		//CHECK_EDGE(4, 7, 1);
-		//CHECK_EDGE(4, 7, 5);
+		CHECK_EDGE(4, 7, 3);
+		CHECK_EDGE(4, 7, 1); // Inside
+		CHECK_EDGE(4, 7, 5);
 		CHECK_EDGE(4, 7, 7);
 	}
 	
@@ -396,15 +409,20 @@ bool OctreeLayerNode::HasMultipleIntersections(const uint32& maxDepthOffset) con
 			return true;
 
 	return false;
+	//*/
 
 	uint32 count = 0;
 
 	// Check for intersections on all edges
 	for (uint32 i = 0; i < 12; ++i)
 	{
+		const uint32 edgeFlag = (1 << i);
+		const bool hasEdge = (MC::CaseRequiredEdges[m_caseIndex] & edgeFlag) != 0 ? 1 : 0;
 		count = 0;
-		CountEdgeIntesection(i, 2, count, maxDepthOffset);
-		if (count >= 2) 
+
+		const uint32 max = (hasEdge ? 3 : 2);
+		CountEdgeIntesection(i, max, count, maxDepthOffset);
+		if (count >= max)
 			return true;
 	}
 	
@@ -461,9 +479,18 @@ void OctreeLayerNode::CountEdgeIntesection(const uint32& edge, const uint32& max
 
 bool OctreeLayerNode::RequiresHigherDetail(const uint32& maxDepthOffset) const
 {
+	if (m_id == 1454)
+	{
+		std::array<OctreeLayerNode*, 8> chil;
+		FetchChildren(chil);
+
+		int n = 0;
+		n++;
+	}
+
 	// Not point doing further checks if there is not children
-	//if (m_childFlags == 0)
-	//	return false;
+	if (m_childFlags == 0)
+		return false;
 
 	// Lowest allowed size, so cannot merge
 	if (m_layer->GetNodeResolution() == 2 || maxDepthOffset == 0)
@@ -561,7 +588,7 @@ void OctreeLayer::PushValueOntoNode(const uvec3& localCoords, const ivec3& offse
 
 	// Find node
 	OctreeLayerNode* node;
-	const bool shouldCreateNode = (value >= m_volume->GetIsoLevel());
+	const bool shouldCreateNode = (value > m_volume->GetIsoLevel());
 	if (AttemptNodeFetch(id, node, shouldCreateNode)) 
 	{
 		const uint32 corner = -offset.x + 2 * (-offset.y + 2 * -offset.z); // The id of the corner of this value
@@ -594,10 +621,10 @@ bool OctreeLayer::ProjectEdgeOntoFace(const uvec3& a, const uvec3& b, const uint
 	const float v11 = m_volume->Get(c11.x, c11.y, c11.z);
 
 	// Are values inside or isosurface
-	const bool b00 = (v00 >= isolevel);
-	const bool b01 = (v01 >= isolevel);
-	const bool b10 = (v10 >= isolevel);
-	const bool b11 = (v11 >= isolevel);
+	const bool b00 = (v00 > isolevel);
+	const bool b01 = (v01 > isolevel);
+	const bool b10 = (v10 > isolevel);
+	const bool b11 = (v11 > isolevel);
 
 	// Retrieve edges
 	std::vector<vec3> edges;
@@ -614,7 +641,7 @@ bool OctreeLayer::ProjectEdgeOntoFace(const uvec3& a, const uvec3& b, const uint
 	
 	// Unexpected number of edges, so check next layer
 	if (edges.size() != 2)
-		return (nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false);
+		return false;// (nextLayer != nullptr ? nextLayer->OverrideEdge(a, b, maxDepthOffset - 1, overrideOutput) : false);
 	
 
 	// Project point onto line through vector rejection method
@@ -624,7 +651,7 @@ bool OctreeLayer::ProjectEdgeOntoFace(const uvec3& a, const uvec3& b, const uint
 
 	const vec3 AB = B - A;
 	const vec3 AP = P - A;
-	overrideOutput = A + glm::dot(AP, AB) / glm::dot(AB, AB) * AB;
+	overrideOutput = A + (glm::dot(AP, AB) / glm::dot(AB, AB)) * AB;
 	return true;
 }
 
@@ -641,6 +668,7 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 
 	const uvec3 remA = a % stride;
 	const uvec3 remB = b % stride;
+
 
 
 	// Moving on x-axis
@@ -895,6 +923,7 @@ bool OctreeLayer::OverrideEdge(const uvec3& a, const uvec3& b, const uint32& max
 				const uvec3 c10 = (local + uvec3(1, 0, 0)) *stride;
 				const uvec3 c11 = (local + uvec3(1, 0, 1)) *stride;
 
+				// KOKO
 				return ProjectEdgeOntoFace(a, b, maxDepthOffset, overrideOutput, c00, c01, c10, c11);
 			}
 			// Edge is not locked to this res
@@ -1025,7 +1054,7 @@ void LayeredVolume::Update(const float & deltaTime)
 		//m_layers[m_layers.size() - 1]->BuildMesh(builder);
 		builder.BuildMesh(TEST_MESH);
 
-		LOG("Build");
+		LOG("Build Count:%i", TEST_MESH->GetDrawCount());
 		TEST_REBUILD = false;
 
 		//for (float& f : m_data)
