@@ -244,8 +244,8 @@ VoxelBuildResults DefaultVolume::Rebuild(const std::vector<VoxelDelta>& deltas, 
 
 	for (uint32 i = 0; i < m_meshes.size(); ++i)
 	{
-		if(recreation && builder.GetIndexCount() > recreation->tricount[recreation->tricount.size() - 1 - i])
-			builder.PerformEdgeCollapseReduction(builder.GetIndexCount() - recreation->tricount[recreation->tricount.size() - 1 - i]);
+		if(recreation)
+			builder.PerformEdgeCollapseReduction(recreation->tricount[recreation->tricount.size() - 1 - i]);
 		builder.BuildMesh(m_meshes[i]);
 
 		endTime = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();

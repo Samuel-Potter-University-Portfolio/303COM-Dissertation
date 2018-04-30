@@ -132,6 +132,9 @@
     <ClCompile Include="LayeredVolume.cpp">
       <Filter>Source Files\Volume\Implementations</Filter>
     </ClCompile>
+    <ClCompile Include="PerlinNoise.cpp">
+      <Filter>Source Files\Engine</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Logger.h">
@@ -223,6 +226,9 @@
     </ClInclude>
     <ClInclude Include="LayeredVolume.h">
       <Filter>Header Files\Volume\Implementations</Filter>
+    </ClInclude>
+    <ClInclude Include="PerlinNoise.h">
+      <Filter>Header Files\Engine</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -63,8 +63,10 @@ void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count)
 {
 	// As per https://github.com/andandandand/progressive-mesh-reduction-with-edge-collapse
 
-	for (uint32 i = 0; i < count;)
+	while(m_indices.size() > count)
 	{
+		if (count == 0 && m_indices.size() < 8)
+			return;
 
 		std::unordered_map<uint32, std::unordered_map<uvec2, vec3, uvec2_KeyFuncs, uvec2_KeyFuncs>> triNormals;
 		std::unordered_map<uvec2, float, uvec2_KeyFuncs, uvec2_KeyFuncs> edgeCosts;
@@ -153,7 +155,6 @@ void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count)
 		std::vector<vec3> oldNormals = m_normals;
 		std::vector<uint32> oldIndices = m_indices;
 
-		const uint32 oldTri = m_indices.size();
 
 		m_vertices.clear();
 		m_normals.clear();
@@ -191,16 +192,11 @@ void MeshBuilderMinimal::PerformEdgeCollapseReduction(const uint32& count)
 			// If normal is 0 it means the edge has been moved so the face is now a line
 			if (normalLengthSqrd != 0.0f && !std::isnan(normalLengthSqrd))
 			{
-				const uint32 na = AddVertex(A, oldNormals[a]);
-				const uint32 nb = AddVertex(B, oldNormals[b]);
-				const uint32 nc = AddVertex(C, oldNormals[c]);
+				const uint32 na = AddVertex(A, normal);
+				const uint32 nb = AddVertex(B, normal);
+				const uint32 nc = AddVertex(C, normal);
 				AddTriangle(na, nb, nc);
 			}
 		}
-
-		if (m_indices.size() > oldTri)
-			i++;
-		else
-			i += oldTri - m_indices.size();
 	}
 }

@@ -261,7 +261,7 @@ int main(int argc, char** argv)
 	Level* level = new Level;
 
 	level->AddObject(new SpectatorController);
-	level->AddObject(new SkyBox);
+	//level->AddObject(new SkyBox);
 	level->AddObject(new LayeredVolume);
 	//level->AddObject(new DefaultVolume);
 	//level->AddObject(new TestObj);

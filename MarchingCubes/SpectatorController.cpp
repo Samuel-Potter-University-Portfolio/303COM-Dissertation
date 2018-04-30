@@ -5,6 +5,7 @@
 #include "Mesh.h"
 #include "InteractionMaterial.h"
 #include "Logger.h"
+#include "PerlinNoise.h"
 
 #include <fstream>
 
@@ -98,8 +99,8 @@ void SpectatorController::Begin()
 		//*/
 
 		// Sphere
-		//*
-		const uint32 radius = 16;
+		/*
+		const uint32 radius = 32;
 		const uint32 diametre = radius * 2;
 		currentVolume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1));
 
@@ -112,6 +113,40 @@ void SpectatorController::Begin()
 					currentVolume->Set(x, y, z, v);
 				}
 				//*/
+
+		// Torus
+		/*
+		const uint32 ringRad = 20;
+		const uint32 tubeRad = 10;
+		const uint32 size = (tubeRad + ringRad) * 2;
+		currentVolume->Init(uvec3(size, size, size), vec3(1, 1, 1));
+
+		for (int x = 0; x < size; ++x)
+			for (int y = 0; y < size; ++y)
+				for (int z = 0; z < size; ++z)
+				{
+					uvec3 coord = uvec3(x - size / 2, y - size / 2, z - size / 2);
+
+					const float partA = (ringRad - sqrt(coord.x*coord.x + coord.y*coord.y));
+					float distance = partA*partA + coord.z*coord.z;
+					float v = 1.0f - glm::clamp(distance / (float)(tubeRad*tubeRad) , 0.0f, 1.0f);
+					currentVolume->Set(x, y, z, v);
+
+				}
+		//*/
+
+		// Noise
+		//*
+		PerlinNoise noise(41513);
+		const uint32 size = 129;
+		currentVolume->Init(uvec3(size, size, size), vec3(1, 1, 1));
+		
+		for (int x = 1; x < size - 1; ++x)
+			for (int y = 1; y < size - 1; ++y)
+				for (int z = 1; z < size -1; ++z)
+					currentVolume->Set(x, y, z, noise.GetOctave(x * 0.04f, y * 0.04f, z * 0.04f, 3, 0.4f) * 0.27f);
+
+		//*/
 
 		// Flat platform
 		/*
