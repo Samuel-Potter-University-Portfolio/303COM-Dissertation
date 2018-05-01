@@ -99,8 +99,8 @@ void SpectatorController::Begin()
 		//*/
 
 		// Sphere
-		/*
-		const uint32 radius = 32;
+		//*
+		const uint32 radius = 16;
 		const uint32 diametre = radius * 2;
 		currentVolume->Init(uvec3(diametre, diametre, diametre), vec3(1, 1, 1));
 
@@ -136,7 +136,7 @@ void SpectatorController::Begin()
 		//*/
 
 		// Noise
-		//*
+		/*
 		PerlinNoise noise(41513);
 		const uint32 size = 129;
 		currentVolume->Init(uvec3(size, size, size), vec3(1, 1, 1));
